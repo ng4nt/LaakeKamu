@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">LaakeKamu</string>
+    <string name="app_name">LääkeKamu</string>
+
+    <!-- Main screens: bottom bar descriptions and screen titles -->
+    <string name="nav_laakelista">Lääkelista</string>
+    <string name="nav_etusivu">Etusivu</string>
+    <string name="nav_oirepaivakirja">Oirepäiväkirja</string>
 </resources>

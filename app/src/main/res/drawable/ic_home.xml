@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma (Flaticon UIcons fi-sr-home), converted from the exported SVG; path data unchanged. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="60dp"
+    android:height="60dp"
+    android:viewportWidth="60"
+    android:viewportHeight="60">
+    <group android:translateY="0.0187">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M30 37.4616C25.8579 37.4616 22.5 40.8195 22.5 44.9616V59.9616H37.5V44.9616C37.5 40.8195 34.1421 37.4616 30 37.4616Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M42.5 44.9626V59.9626H52.5C56.6421 59.9626 60 56.6048 60 52.4626V29.6602C60.0006 28.3614 59.4959 27.1133 58.5925 26.1802L37.3475 3.2126C33.5989 -0.843258 27.2722 -1.09228 23.2164 2.65631C23.0237 2.83444 22.8381 3.01995 22.6601 3.2126L1.45254 26.1727C0.521836 27.1097 -0.000351385 28.377 1.77402e-07 29.6977V52.4626C1.77402e-07 56.6048 3.35789 59.9626 7.5 59.9626H17.5V44.9626C17.5467 38.1456 23.0507 32.5787 29.696 32.4184C36.5637 32.2527 42.4477 37.9144 42.5 44.9626Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M30 37.4616C25.8579 37.4616 22.5 40.8195 22.5 44.9616V59.9616H37.5V44.9616C37.5 40.8195 34.1421 37.4616 30 37.4616Z" />
+    </group>
+</vector>
