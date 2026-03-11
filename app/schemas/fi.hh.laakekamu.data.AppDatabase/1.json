@@ -1,0 +1,366 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "101316c793c37f22e367d56cac69984d",
+    "entities": [
+      {
+        "tableName": "Tyypit",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`tyyppi_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `tyyppi` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "tyyppiId",
+            "columnName": "tyyppi_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tyyppi",
+            "columnName": "tyyppi",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "tyyppi_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Tyypit_tyyppi",
+            "unique": true,
+            "columnNames": [
+              "tyyppi"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_Tyypit_tyyppi` ON `${TABLE_NAME}` (`tyyppi`)"
+          }
+        ]
+      },
+      {
+        "tableName": "Yksikot",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`yksikko` TEXT NOT NULL, PRIMARY KEY(`yksikko`))",
+        "fields": [
+          {
+            "fieldPath": "yksikko",
+            "columnName": "yksikko",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "yksikko"
+          ]
+        }
+      },
+      {
+        "tableName": "Laakkeet",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`laake_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `nimi` TEXT NOT NULL, `tyyppi_id` INTEGER NOT NULL, `annosmaara` TEXT NOT NULL, `yksikko` TEXT NOT NULL, `kuinka_usein` TEXT NOT NULL, `aloituspv` INTEGER NOT NULL, `lopetuspv` INTEGER, `aktiivinen` INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(`tyyppi_id`) REFERENCES `Tyypit`(`tyyppi_id`) ON UPDATE NO ACTION ON DELETE NO ACTION , FOREIGN KEY(`yksikko`) REFERENCES `Yksikot`(`yksikko`) ON UPDATE NO ACTION ON DELETE NO ACTION )",
+        "fields": [
+          {
+            "fieldPath": "laakeId",
+            "columnName": "laake_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nimi",
+            "columnName": "nimi",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tyyppiId",
+            "columnName": "tyyppi_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "annosmaara",
+            "columnName": "annosmaara",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "yksikko",
+            "columnName": "yksikko",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kuinkaUsein",
+            "columnName": "kuinka_usein",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aloituspv",
+            "columnName": "aloituspv",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lopetuspv",
+            "columnName": "lopetuspv",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "aktiivinen",
+            "columnName": "aktiivinen",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "1"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "laake_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_laakkeet_tyyppi_id",
+            "unique": false,
+            "columnNames": [
+              "tyyppi_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_laakkeet_tyyppi_id` ON `${TABLE_NAME}` (`tyyppi_id`)"
+          },
+          {
+            "name": "idx_laakkeet_yksikko",
+            "unique": false,
+            "columnNames": [
+              "yksikko"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_laakkeet_yksikko` ON `${TABLE_NAME}` (`yksikko`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "Tyypit",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "tyyppi_id"
+            ],
+            "referencedColumns": [
+              "tyyppi_id"
+            ]
+          },
+          {
+            "table": "Yksikot",
+            "onDelete": "NO ACTION",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "yksikko"
+            ],
+            "referencedColumns": [
+              "yksikko"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Muistutukset",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`muistutus_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `laake_id` INTEGER NOT NULL, `aika` INTEGER NOT NULL, `voimassa_alkaen` INTEGER NOT NULL, `voimassa_asti` INTEGER, FOREIGN KEY(`laake_id`) REFERENCES `Laakkeet`(`laake_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "muistutusId",
+            "columnName": "muistutus_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "laakeId",
+            "columnName": "laake_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aika",
+            "columnName": "aika",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voimassaAlkaen",
+            "columnName": "voimassa_alkaen",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "voimassaAsti",
+            "columnName": "voimassa_asti",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "muistutus_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_muistutukset_laake_id",
+            "unique": false,
+            "columnNames": [
+              "laake_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_muistutukset_laake_id` ON `${TABLE_NAME}` (`laake_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "Laakkeet",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "laake_id"
+            ],
+            "referencedColumns": [
+              "laake_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Laakkeenotto",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`otto_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `muistutus_id` INTEGER NOT NULL, `paivamaara` INTEGER NOT NULL, `ottoaika` INTEGER NOT NULL, FOREIGN KEY(`muistutus_id`) REFERENCES `Muistutukset`(`muistutus_id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "ottoId",
+            "columnName": "otto_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "muistutusId",
+            "columnName": "muistutus_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paivamaara",
+            "columnName": "paivamaara",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ottoaika",
+            "columnName": "ottoaika",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "otto_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_Laakkeenotto_muistutus_id_paivamaara",
+            "unique": true,
+            "columnNames": [
+              "muistutus_id",
+              "paivamaara"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_Laakkeenotto_muistutus_id_paivamaara` ON `${TABLE_NAME}` (`muistutus_id`, `paivamaara`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "Muistutukset",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "muistutus_id"
+            ],
+            "referencedColumns": [
+              "muistutus_id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "Oiremerkinnat",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`merkinta_id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `kuvaus` TEXT NOT NULL, `laake_id` INTEGER, `aloituspv` INTEGER NOT NULL, `lopetuspv` INTEGER, FOREIGN KEY(`laake_id`) REFERENCES `Laakkeet`(`laake_id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "fields": [
+          {
+            "fieldPath": "merkintaId",
+            "columnName": "merkinta_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kuvaus",
+            "columnName": "kuvaus",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "laakeId",
+            "columnName": "laake_id",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "aloituspv",
+            "columnName": "aloituspv",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lopetuspv",
+            "columnName": "lopetuspv",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "merkinta_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "idx_oiremerkinnat_laake_id",
+            "unique": false,
+            "columnNames": [
+              "laake_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `idx_oiremerkinnat_laake_id` ON `${TABLE_NAME}` (`laake_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "Laakkeet",
+            "onDelete": "SET NULL",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "laake_id"
+            ],
+            "referencedColumns": [
+              "laake_id"
+            ]
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '101316c793c37f22e367d56cac69984d')"
+    ]
+  }
+}

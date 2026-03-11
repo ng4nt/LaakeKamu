@@ -38,6 +38,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates debug-only behaviour (StrictMode, later the demo data).
+        buildConfig = true
     }
 }
 
