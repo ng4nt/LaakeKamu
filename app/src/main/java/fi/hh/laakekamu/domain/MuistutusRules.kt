@@ -1,6 +1,8 @@
 package fi.hh.laakekamu.domain
 
 import java.time.LocalDate
+import java.time.LocalTime
+import java.time.ZonedDateTime
 
 /** A reminder time with its validity period, as rules see it (mirrors Muistutukset). */
 data class Muistutusjakso(
@@ -131,3 +133,89 @@ fun endAll(current: List<Muistutusjakso>, today: LocalDate, takenToday: Set<Long
 /** A reminder that starts today or later and isn't taken today has no due days in the past. */
 private fun hasNoHistory(jakso: Muistutusjakso, today: LocalDate, takenToday: Boolean): Boolean =
     !jakso.voimassaAlkaen.isBefore(today) && !takenToday
+
+// ---- Scheduling: next trigger, slots, late doses ----
+
+/** A reminder together with its medication's period: what scheduling needs. */
+data class MuistutusAikataulu(
+    val muistutusId: Long,
+    /** Minutes after midnight, local wall-clock time. */
+    val aika: Int,
+    val voimassaAlkaen: LocalDate,
+    val voimassaAsti: LocalDate?,
+    val aloituspv: LocalDate,
+    val lopetuspv: LocalDate?
+)
+
+/** One dose: reminder [muistutusId] on day [paivamaara], due at [aika]. */
+data class Annos(val muistutusId: Long, val paivamaara: LocalDate, val aika: ZonedDateTime)
+
+/** A Laakkeenotto row's key: the dose of reminder [muistutusId] on [paivamaara] is taken. */
+data class TakenDose(val muistutusId: Long, val paivamaara: LocalDate)
+
+/** Hours before boot within which a missed dose is still posted as "Myöhässä". */
+private const val LATE_WINDOW_HOURS = 2L
+
+/**
+ * The earliest due occurrence of [aikataulu] at or after [now], in [now]'s zone, or null
+ * when the reminder or the medication has ended. Every date is resolved on its own, so daylight
+ * saving is handled: a 3.30 dose on the spring-forward day fires at 4.30, and on the fall-back
+ * day at the first 3.30.
+ */
+fun nextTrigger(now: ZonedDateTime, aikataulu: MuistutusAikataulu): ZonedDateTime? {
+    val firstDay = maxOf(now.toLocalDate(), aikataulu.voimassaAlkaen, aikataulu.aloituspv)
+    val lastDay = listOfNotNull(aikataulu.voimassaAsti, aikataulu.lopetuspv).minOrNull()
+    // The first candidate can only be before now on today's date, so two days are enough.
+    for (day in listOf(firstDay, firstDay.plusDays(1))) {
+        if (lastDay != null && day.isAfter(lastDay)) return null
+        val at = ZonedDateTime.of(day, aikaToLocalTime(aikataulu.aika), now.zone)
+        if (!at.isBefore(now)) return at
+    }
+    return null
+}
+
+/**
+ * One alarm per distinct time (slot), because allow-while-idle alarms are limited to one
+ * per nine minutes per app. Maps each slot's `aika` to the earliest [nextTrigger] of its
+ * reminders; slots whose reminders have all ended are left out.
+ */
+fun nextSlotTriggers(
+    aikataulut: List<MuistutusAikataulu>,
+    now: ZonedDateTime
+): Map<Int, ZonedDateTime> = aikataulut
+    .mapNotNull { a -> nextTrigger(now, a)?.let { a.aika to it } }
+    .groupBy({ it.first }, { it.second })
+    .mapValues { (_, triggers) -> triggers.min() }
+    .toSortedMap()
+
+/**
+ * Doses that were due in the window [now - 2 h, now) and aren't taken, oldest first. The
+ * window may start yesterday, so yesterday's late doses keep yesterday's date.
+ */
+fun lateDoses(
+    now: ZonedDateTime,
+    aikataulut: List<MuistutusAikataulu>,
+    taken: Set<TakenDose>
+): List<Annos> {
+    val windowStart = now.minusHours(LATE_WINDOW_HOURS)
+    val days = listOf(now.toLocalDate().minusDays(1), now.toLocalDate())
+    return days
+        .flatMap { day ->
+            aikataulut
+                .filter {
+                    isDueOn(day, it.voimassaAlkaen, it.voimassaAsti, it.aloituspv, it.lopetuspv)
+                }
+                .map {
+                    Annos(
+                        it.muistutusId,
+                        day,
+                        ZonedDateTime.of(day, aikaToLocalTime(it.aika), now.zone)
+                    )
+                }
+        }
+        .filter { !it.aika.isBefore(windowStart) && it.aika.isBefore(now) }
+        .filter { TakenDose(it.muistutusId, it.paivamaara) !in taken }
+        .sortedWith(compareBy({ it.aika }, { it.muistutusId }))
+}
+
+private fun aikaToLocalTime(aika: Int): LocalTime = LocalTime.of(aika / 60, aika % 60)
