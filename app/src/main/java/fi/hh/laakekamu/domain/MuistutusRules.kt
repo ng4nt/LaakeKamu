@@ -1,7 +1,6 @@
 package fi.hh.laakekamu.domain
 
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZonedDateTime
 
 /** A reminder time with its validity period, as rules see it (mirrors Muistutukset). */
@@ -191,6 +190,9 @@ fun nextSlotTriggers(
 /**
  * Doses that were due in the window [now - 2 h, now) and aren't taken, oldest first. The
  * window may start yesterday, so yesterday's late doses keep yesterday's date.
+ *
+ * Used only once after BOOT_COMPLETED, for the "Myöhässä" notifications of doses missed while
+ * the phone was off. Home doesn't use it: missed doses stay red there through [tilaOf].
  */
 fun lateDoses(
     now: ZonedDateTime,
@@ -217,5 +219,3 @@ fun lateDoses(
         .filter { TakenDose(it.muistutusId, it.paivamaara) !in taken }
         .sortedWith(compareBy({ it.aika }, { it.muistutusId }))
 }
-
-private fun aikaToLocalTime(aika: Int): LocalTime = LocalTime.of(aika / 60, aika % 60)

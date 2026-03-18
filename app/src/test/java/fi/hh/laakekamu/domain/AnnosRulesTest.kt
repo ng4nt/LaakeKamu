@@ -1,7 +1,9 @@
 package fi.hh.laakekamu.domain
 
 import java.time.LocalDate
-import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -64,6 +66,29 @@ class AnnosRulesTest {
         assertEquals(AnnoksenTila.OTTAMATTA, tilaOf(today, 0, taken = false, at(today, 0, 0)))
     }
 
+    @Test
+    fun state_fallBackNight_staysMissedWhenTheClockRepeatsTheHour() {
+        // 25.10.2026: 4.00 summer time goes back to 3.00, so 3.00-3.59 happens twice.
+        val day = LocalDate.of(2026, 10, 25)
+        val firstPass = ZonedDateTime.ofLocal(day.atTime(3, 30), zone, ZoneOffset.ofHours(3))
+        val secondPass = ZonedDateTime.ofLocal(day.atTime(3, 10), zone, ZoneOffset.ofHours(2))
+        assertEquals(AnnoksenTila.OTTAMATTA, tilaOf(day, 210, taken = false, firstPass))
+        assertEquals(AnnoksenTila.OTTAMATTA, tilaOf(day, 210, taken = false, secondPass))
+    }
+
+    @Test
+    fun state_springForwardNight_turnsMissedWhenTheAlarmFires_notEarlier() {
+        // 29.3.2026: 3.00 jumps to 4.00, so a 3.30 dose is due at 4.30 (as nextTrigger fires it).
+        val day = LocalDate.of(2026, 3, 29)
+        assertEquals(AnnoksenTila.TULOSSA, tilaOf(day, 210, taken = false, at(day, 4, 10)))
+        assertEquals(AnnoksenTila.OTTAMATTA, tilaOf(day, 210, taken = false, at(day, 4, 30)))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun state_timeOutsideTheDay_isRejectedClearly() {
+        tilaOf(today, 1440, taken = false, at(today, 9, 0))
+    }
+
     // Editability
 
     @Test
@@ -83,6 +108,10 @@ class AnnosRulesTest {
         assertFalse(isDayComplete(listOf(AnnoksenTila.OTETTU, AnnoksenTila.TULOSSA)))
     }
 
-    private fun at(day: LocalDate, hour: Int, minute: Int) =
-        LocalDateTime.of(day.year, day.month, day.dayOfMonth, hour, minute)
+    private fun at(day: LocalDate, hour: Int, minute: Int): ZonedDateTime =
+        ZonedDateTime.of(day.atTime(hour, minute), zone)
+
+    private companion object {
+        val zone: ZoneId = ZoneId.of("Europe/Helsinki")
+    }
 }
