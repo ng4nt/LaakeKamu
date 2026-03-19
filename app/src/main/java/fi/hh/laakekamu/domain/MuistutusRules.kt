@@ -111,17 +111,17 @@ fun planEdit(
     takenToday: Set<Long>
 ): List<Muutos> {
     val editedById = edited.filter { it.id != null }.associateBy { it.id }
+    val newTimes = edited.filter { it.id == null }.map { it.aika }.toMutableList()
     val changes = current.flatMap { jakso ->
         val row = editedById[jakso.id]
-        if (row == null) {
-            listOf(endReminder(jakso, today, jakso.id in takenToday))
-        } else {
-            changeTime(jakso, row.aika, today, jakso.id in takenToday, aloituspv)
+        when {
+            row != null -> changeTime(jakso, row.aika, today, jakso.id in takenToday, aloituspv)
+            // The row was removed but the same time was added back: keep the reminder as is.
+            newTimes.remove(jakso.aika) -> emptyList()
+            else -> listOf(endReminder(jakso, today, jakso.id in takenToday))
         }
     }
-    val additions = edited
-        .filter { it.id == null }
-        .map { Muutos.Lisaa(it.aika, newReminderStart(today, aloituspv)) }
+    val additions = newTimes.map { Muutos.Lisaa(it, newReminderStart(today, aloituspv)) }
     return changes + additions
 }
 

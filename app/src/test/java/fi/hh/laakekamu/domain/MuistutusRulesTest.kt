@@ -137,6 +137,19 @@ class MuistutusRulesTest {
     }
 
     @Test
+    fun planEdit_removingATimeAndAddingTheSameTimeAgain_keepsTheReminder() {
+        val current = listOf(
+            jakso(1, 480, today.minusDays(10)),
+            jakso(2, 1200, today.minusDays(10))
+        )
+        val edited = listOf(EditedTime(id = 1, aika = 480), EditedTime(id = null, aika = 1200))
+        assertEquals(
+            emptyList<Muutos>(),
+            planEdit(current, edited, today, today.minusDays(10), takenToday = emptySet())
+        )
+    }
+
+    @Test
     fun endAll_deleteOrTarvittaessa_endsEveryCurrentReminder() {
         val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 720, today))
         assertEquals(
