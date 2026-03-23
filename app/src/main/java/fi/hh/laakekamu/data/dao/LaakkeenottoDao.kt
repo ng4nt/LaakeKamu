@@ -26,4 +26,11 @@ interface LaakkeenottoDao {
     /** Doses taken for days [alku]..[loppu] (inclusive). */
     @Query("SELECT * FROM Laakkeenotto WHERE paivamaara BETWEEN :alku AND :loppu")
     fun observeBetween(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>>
+
+    /** Which of [muistutusIds] have their dose taken on [paiva] (the "taken today" check). */
+    @Query(
+        "SELECT muistutus_id FROM Laakkeenotto " +
+            "WHERE paivamaara = :paiva AND muistutus_id IN (:muistutusIds)"
+    )
+    suspend fun takenOn(paiva: LocalDate, muistutusIds: List<Long>): List<Long>
 }

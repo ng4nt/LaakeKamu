@@ -24,4 +24,8 @@ interface LaakeDao {
     /** Medications that aren't deleted, by name. */
     @Query("SELECT * FROM Laakkeet WHERE aktiivinen = 1 ORDER BY nimi COLLATE NOCASE")
     fun observeActive(): Flow<List<Laake>>
+
+    /** The same as [observeActive], once (for the name check). */
+    @Query("SELECT * FROM Laakkeet WHERE aktiivinen = 1")
+    suspend fun getActive(): List<Laake>
 }

@@ -1,6 +1,7 @@
 package fi.hh.laakekamu.data
 
 import android.content.Context
+import java.time.Clock
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -13,8 +14,13 @@ import kotlinx.coroutines.withContext
  * The database is opened lazily through [database], never in Application.onCreate. The Mutex
  * makes sure only one instance is created even when a receiver and the UI ask at the same time.
  * Non-Room I/O (from Keystore and SQLCipher setup) runs on the injected [ioDispatcher].
+ * [clock] gives "today" in the system time zone; tests use a fixed one.
  */
-class AppContainer(context: Context, val ioDispatcher: CoroutineDispatcher = Dispatchers.IO) {
+class AppContainer(
+    context: Context,
+    val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    val clock: Clock = Clock.systemDefaultZone()
+) {
     private val appContext = context.applicationContext
     private val databaseMutex = Mutex()
 
@@ -26,4 +32,8 @@ class AppContainer(context: Context, val ioDispatcher: CoroutineDispatcher = Dis
         database ?: withContext(ioDispatcher) { AppDatabase.build(appContext) }
             .also { database = it }
     }
+
+    val laakeRepository: LaakeRepository by lazy { LaakeRepository(::database, clock) }
+
+    val oireRepository: OireRepository by lazy { OireRepository(::database) }
 }
