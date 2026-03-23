@@ -5,4 +5,13 @@
     <string name="nav_laakelista">Lääkelista</string>
     <string name="nav_etusivu">Etusivu</string>
     <string name="nav_oirepaivakirja">Oirepäiväkirja</string>
+
+    <!-- Shared form components: date and time pickers -->
+    <string name="valitse_paiva">Valitse päivä</string>
+    <string name="valitse_aika">Valitse aika</string>
+    <string name="ok">OK</string>
+    <string name="peruuta">Peruuta</string>
+    <string name="tyhjenna">Tyhjennä</string>
+    <string name="paivamaara_placeholder">pp.kk.vvvv</string>
+    <string name="klo_aika">klo %1$s</string>
 </resources>
