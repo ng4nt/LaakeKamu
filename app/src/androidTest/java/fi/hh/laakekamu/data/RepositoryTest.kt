@@ -37,7 +37,7 @@ class RepositoryTest {
     private val clock = Clock.fixed(today.atTime(10, 0).atZone(zone).toInstant(), zone)
 
     private lateinit var db: AppDatabase
-    private lateinit var laakkeet: LaakeRepository
+    private lateinit var laakkeet: RoomLaakeRepository
     private lateinit var oireet: OireRepository
 
     @Before
@@ -46,7 +46,7 @@ class RepositoryTest {
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java
         ).addCallback(SeedCallback).build()
-        laakkeet = LaakeRepository({ db }, clock)
+        laakkeet = RoomLaakeRepository({ db }, clock)
         oireet = OireRepository { db }
     }
 
