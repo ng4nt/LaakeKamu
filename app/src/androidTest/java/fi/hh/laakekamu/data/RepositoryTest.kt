@@ -180,6 +180,36 @@ class RepositoryTest {
     }
 
     @Test
+    fun update_reopeningAMedicationThatEnded_keepsTheGapDaysOutOfItsReminders() = runTest {
+        val oldEnd = today.minusDays(5)
+        val id = laakkeet.add(laake().copy(lopetuspv = oldEnd), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val old = oldReminder(id, 480)
+
+        laakkeet.update(laake().copy(laakeId = id, lopetuspv = null), listOf(EditedTime(old, 480)))
+
+        val rows = reminders(id).associateBy { it.muistutusId }
+        assertEquals(oldEnd, rows.getValue(old).voimassaAsti)
+        val restarted = rows.values.single { it.voimassaAsti == null }
+        assertEquals(480, restarted.aika)
+        assertEquals(today, restarted.voimassaAlkaen)
+    }
+
+    @Test
+    fun update_endDateMovedIntoThePast_isRejected() = runTest {
+        val id = laakkeet.add(laake(), listOf(480))
+        val reminder = reminders(id).single().muistutusId
+        val error = runCatching {
+            laakkeet.update(
+                laake().copy(laakeId = id, lopetuspv = yesterday),
+                listOf(EditedTime(reminder, 480))
+            )
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+        assertNull(db.laakeDao().getById(id)!!.lopetuspv)
+    }
+
+    @Test
     fun delete_isSoft_endsReminders_andKeepsTakenHistory() = runTest {
         val id = laakkeet.add(laake(), listOf(480))
         db.muistutusDao().deleteById(reminders(id).single().muistutusId)

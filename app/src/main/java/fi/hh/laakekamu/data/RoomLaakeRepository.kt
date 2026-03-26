@@ -12,10 +12,12 @@ import fi.hh.laakekamu.domain.Muutos
 import fi.hh.laakekamu.domain.NameError
 import fi.hh.laakekamu.domain.endAll
 import fi.hh.laakekamu.domain.isValidDateRange
+import fi.hh.laakekamu.domain.isValidEndDateEdit
 import fi.hh.laakekamu.domain.isValidReminderTime
 import fi.hh.laakekamu.domain.moveStart
 import fi.hh.laakekamu.domain.newReminderStart
 import fi.hh.laakekamu.domain.planEdit
+import fi.hh.laakekamu.domain.reopenAfterEnd
 import fi.hh.laakekamu.domain.validateName
 import java.time.Clock
 import java.time.LocalDate
@@ -94,7 +96,8 @@ class RoomLaakeRepository(
      * Saves an edited medication: its own row, then its reminder times through the reminder rules. [times] is the
      * wizard's time list (existing reminders by id, new ones without). Switching to
      * TARVITTAESSA ends every current reminder; a changed start date moves reminders that
-     * haven't started yet.
+     * haven't started yet; a changed end date may not be in the past, and reopening a medication
+     * that ended before yesterday restarts its times from today without touching the gap.
      */
     override suspend fun update(laake: Laake, times: List<EditedTime>) {
         val db = database()
@@ -105,9 +108,12 @@ class RoomLaakeRepository(
                 }
             require(old.aktiivinen) { "A deleted medication can't be edited" }
             requireValid(laake, times.map { it.aika }, editedId = laake.laakeId)
+            val today = today()
+            require(isValidEndDateEdit(old.lopetuspv, laake.lopetuspv, today)) {
+                "A changed lopetuspv can't be in the past"
+            }
             db.laakeDao().update(laake.copy(aktiivinen = true))
 
-            val today = today()
             // Times first, against the reminders as they were...
             val current = currentJaksot(db, laake.laakeId)
             val timeChanges = if (laake.kuinkaUsein == KuinkaUsein.TARVITTAESSA) {
@@ -123,6 +129,11 @@ class RoomLaakeRepository(
                     moveStart(afterTimes, laake.aloituspv, today, takenToday(db, afterTimes, today))
                 apply(db, laake.laakeId, afterTimes, moves)
             }
+            // ...and last, reopening after an old end date, so the gap days stay not due.
+            val afterStart = currentJaksot(db, laake.laakeId)
+            val reopen =
+                reopenAfterEnd(afterStart, old.lopetuspv, laake.lopetuspv, today, laake.aloituspv)
+            apply(db, laake.laakeId, afterStart, reopen)
         }
     }
 

@@ -138,6 +138,43 @@ fun planEdit(
     return changes + additions
 }
 
+/**
+ * May a medication's end date change from [oldEnd] to [newEnd] on [today]? An end before
+ * today would hide doses that were due on past days, so a *changed* end date must be open or
+ * today or later. Keeping an old end date that is already in the past is fine.
+ */
+fun isValidEndDateEdit(oldEnd: LocalDate?, newEnd: LocalDate?, today: LocalDate): Boolean =
+    newEnd == oldEnd || newEnd == null || !newEnd.isBefore(today)
+
+/**
+ * A medication that ended before yesterday ([oldEnd]) is extended or made continuous
+ * ([newEnd] later or null). The days between the old end and today were not due and must stay
+ * so: current reminders end on [oldEnd] (or are deleted if they started after it) and the same
+ * times start again at max(today, [aloituspv]). Reminders that already start then are kept.
+ * Returns no changes when there is no gap (old end yesterday or later) or no extension.
+ */
+fun reopenAfterEnd(
+    current: List<Muistutusjakso>,
+    oldEnd: LocalDate?,
+    newEnd: LocalDate?,
+    today: LocalDate,
+    aloituspv: LocalDate
+): List<Muutos> {
+    if (oldEnd == null || !oldEnd.isBefore(today.minusDays(1))) return emptyList()
+    if (newEnd != null && !newEnd.isAfter(oldEnd)) return emptyList()
+    val restart = maxOf(today, aloituspv)
+    return current
+        .filter { it.voimassaAsti == null && it.voimassaAlkaen.isBefore(restart) }
+        .flatMap { jakso ->
+            val end = if (jakso.voimassaAlkaen.isAfter(oldEnd)) {
+                Muutos.Poista(jakso.id)
+            } else {
+                Muutos.Paata(jakso.id, oldEnd)
+            }
+            listOf(end, Muutos.Lisaa(jakso.aika, restart))
+        }
+}
+
 /** Ends every current reminder (medication deleted, or switched to Tarvittaessa). */
 fun endAll(current: List<Muistutusjakso>, today: LocalDate, takenToday: Set<Long>): List<Muutos> =
     current.map { endReminder(it, today, it.id in takenToday) }

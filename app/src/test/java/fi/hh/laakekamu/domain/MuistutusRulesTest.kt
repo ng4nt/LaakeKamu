@@ -2,6 +2,8 @@ package fi.hh.laakekamu.domain
 
 import java.time.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MuistutusRulesTest {
@@ -180,6 +182,64 @@ class MuistutusRulesTest {
         assertEquals(
             listOf(Muutos.Paata(1, yesterday), Muutos.Lisaa(600, today)),
             planEdit(current, listOf(EditedTime(99, 600)), today, today.minusDays(10), emptySet())
+        )
+    }
+
+    // Medication end date (lopetuspv) edited
+
+    @Test
+    fun endDateEdit_mayNotMoveIntoThePast_butAnUnchangedOldEndIsFine() {
+        val oldEnd = today.minusDays(5)
+        assertTrue(isValidEndDateEdit(oldEnd, oldEnd, today))
+        assertTrue(isValidEndDateEdit(oldEnd, null, today))
+        assertTrue(isValidEndDateEdit(null, today, today))
+        assertTrue(isValidEndDateEdit(null, today.plusDays(9), today))
+        assertFalse(isValidEndDateEdit(null, yesterday, today))
+        assertFalse(isValidEndDateEdit(today.plusDays(9), today.minusDays(3), today))
+        assertFalse(isValidEndDateEdit(oldEnd, oldEnd.plusDays(2), today))
+    }
+
+    @Test
+    fun reopen_afterAGap_endsAtTheOldEnd_andRestartsTheSameTimesToday() {
+        val oldEnd = today.minusDays(5)
+        val current = listOf(
+            jakso(1, 480, today.minusDays(30)),
+            jakso(2, 720, today.minusDays(2)),
+            jakso(3, 1200, today)
+        )
+        assertEquals(
+            listOf(
+                Muutos.Paata(1, oldEnd),
+                Muutos.Lisaa(480, today),
+                Muutos.Poista(2),
+                Muutos.Lisaa(720, today)
+            ),
+            reopenAfterEnd(current, oldEnd, newEnd = null, today, aloituspv = today.minusDays(30))
+        )
+    }
+
+    @Test
+    fun reopen_notNeededWithoutAGapOrWithoutExtending() {
+        val current = listOf(jakso(1, 480, today.minusDays(30)))
+        val start = today.minusDays(30)
+        assertEquals(emptyList<Muutos>(), reopenAfterEnd(current, yesterday, null, today, start))
+        assertEquals(emptyList<Muutos>(), reopenAfterEnd(current, null, null, today, start))
+        val oldEnd = today.minusDays(5)
+        assertEquals(emptyList<Muutos>(), reopenAfterEnd(current, oldEnd, oldEnd, today, start))
+    }
+
+    @Test
+    fun reopen_withAFutureStart_restartsOnTheStart() {
+        val oldEnd = today.minusDays(5)
+        assertEquals(
+            listOf(Muutos.Paata(1, oldEnd), Muutos.Lisaa(480, today.plusDays(3))),
+            reopenAfterEnd(
+                listOf(jakso(1, 480, today.minusDays(30))),
+                oldEnd,
+                null,
+                today,
+                aloituspv = today.plusDays(3)
+            )
         )
     }
 
