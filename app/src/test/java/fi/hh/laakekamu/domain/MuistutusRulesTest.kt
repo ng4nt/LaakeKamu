@@ -150,6 +150,40 @@ class MuistutusRulesTest {
     }
 
     @Test
+    fun end_futureStartWithAStrayTakenRowForToday_isStillDeleted() {
+        // A tick on a stale notification can leave a row for a day that isn't due.
+        assertEquals(
+            Muutos.Poista(1),
+            endReminder(jakso(1, 480, tomorrow), today, takenToday = true)
+        )
+        assertEquals(
+            listOf(Muutos.VaihdaAika(1, 540)),
+            changeTime(jakso(1, 480, tomorrow), 540, today, takenToday = true, aloituspv = tomorrow)
+        )
+    }
+
+    @Test
+    fun planEdit_editedTimeAddedBackAsANewRow_keepsTheReminder_andAddsTheEditedTime() {
+        // 8.00 taken today, then edited to 9.00 and a new 8.00 row added.
+        val current = listOf(jakso(1, 480, today.minusDays(10)))
+        val edited = listOf(EditedTime(id = 1, aika = 540), EditedTime(id = null, aika = 480))
+        assertEquals(
+            listOf(Muutos.Lisaa(540, today)),
+            planEdit(current, edited, today, today.minusDays(10), takenToday = setOf(1L))
+        )
+    }
+
+    @Test
+    fun planEdit_unknownId_isTreatedAsANewTime() {
+        // A stale id restored from saved state must not drop the time.
+        val current = listOf(jakso(1, 480, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(1, yesterday), Muutos.Lisaa(600, today)),
+            planEdit(current, listOf(EditedTime(99, 600)), today, today.minusDays(10), emptySet())
+        )
+    }
+
+    @Test
     fun endAll_deleteOrTarvittaessa_endsEveryCurrentReminder() {
         val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 720, today))
         assertEquals(

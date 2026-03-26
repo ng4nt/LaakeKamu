@@ -75,8 +75,10 @@ fun changeTime(
  * The medication's start date was edited. Current reminders that haven't started before
  * today move to max(today, [newAloituspv]). If today's dose was already taken and the start
  * moves into the future, the reminder ends today and a new one starts on the new date, so the
- * taken dose stays visible. Reminders that started earlier are left alone (documented
- * limitation: existing history isn't rewritten).
+ * taken row stays inside its reminder's validity. (The dose is then no longer due today, because
+ * the medication now starts later, so Home hides it; the diary still lists the taken row.)
+ * Reminders that started earlier are left alone (documented limitation: existing history isn't
+ * rewritten).
  */
 fun moveStart(
     current: List<Muistutusjakso>,
@@ -102,6 +104,10 @@ fun moveStart(
  * (voimassa_asti IS NULL). Unchanged times stay, edited times use [changeTime], removed times
  * use [endReminder], and new times start at [newReminderStart]. [takenToday] holds the ids of
  * reminders whose dose is taken today.
+ *
+ * A new row with the same time as a removed or edited reminder keeps that reminder instead of
+ * creating a duplicate dose for today; an id that isn't a current reminder (e.g. a stale one
+ * restored from saved state) counts as a new time.
  */
 fun planEdit(
     current: List<Muistutusjakso>,
@@ -110,11 +116,18 @@ fun planEdit(
     aloituspv: LocalDate,
     takenToday: Set<Long>
 ): List<Muutos> {
-    val editedById = edited.filter { it.id != null }.associateBy { it.id }
-    val newTimes = edited.filter { it.id == null }.map { it.aika }.toMutableList()
+    val currentIds = current.map { it.id }.toSet()
+    val editedById = edited.filter { it.id in currentIds }.associateBy { it.id }
+    val newTimes = edited.filter { it.id !in currentIds }.map { it.aika }.toMutableList()
     val changes = current.flatMap { jakso ->
         val row = editedById[jakso.id]
         when {
+            // Edited to another time while its old time was added back as a new row: keep this
+            // reminder and add the edited time as the new one instead.
+            row != null && row.aika != jakso.aika && newTimes.remove(jakso.aika) -> {
+                newTimes.add(row.aika)
+                emptyList()
+            }
             row != null -> changeTime(jakso, row.aika, today, jakso.id in takenToday, aloituspv)
             // The row was removed but the same time was added back: keep the reminder as is.
             newTimes.remove(jakso.aika) -> emptyList()
@@ -129,9 +142,14 @@ fun planEdit(
 fun endAll(current: List<Muistutusjakso>, today: LocalDate, takenToday: Set<Long>): List<Muutos> =
     current.map { endReminder(it, today, it.id in takenToday) }
 
-/** A reminder that starts today or later and isn't taken today has no due days in the past. */
+/**
+ * A reminder has no due days in the past when it starts later than today, or starts today and
+ * isn't taken today. (A row for a reminder that hasn't started can only come from a stale
+ * notification; it isn't history, and the delete cascades it away.)
+ */
 private fun hasNoHistory(jakso: Muistutusjakso, today: LocalDate, takenToday: Boolean): Boolean =
-    !jakso.voimassaAlkaen.isBefore(today) && !takenToday
+    jakso.voimassaAlkaen.isAfter(today) ||
+        (!jakso.voimassaAlkaen.isBefore(today) && !takenToday)
 
 // ---- Scheduling: next trigger, slots, late doses ----
 
