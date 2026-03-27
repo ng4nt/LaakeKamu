@@ -226,6 +226,53 @@ class RepositoryTest {
     }
 
     @Test
+    fun update_timeChangeAndStartMoveInOneSave_afterTakingToday() = runTest {
+        // PlanEdit first, then moveStart against the re-read reminders.
+        val id = laakkeet.add(laake(aloituspv = today), listOf(480))
+        val first = reminders(id).single().muistutusId
+        take(first, today)
+
+        laakkeet.update(
+            laake(aloituspv = today.plusDays(7)).copy(laakeId = id),
+            listOf(EditedTime(first, 540))
+        )
+
+        val rows = reminders(id)
+        assertEquals(today, rows.single { it.muistutusId == first }.voimassaAsti)
+        val current = rows.single { it.voimassaAsti == null }
+        assertEquals(540, current.aika)
+        assertEquals(today.plusDays(7), current.voimassaAlkaen)
+    }
+
+    @Test
+    fun delete_reminderStartedTodayAndNotTaken_isRemovedCompletely() = runTest {
+        val id = laakkeet.add(laake(), listOf(480))
+        laakkeet.delete(id)
+        assertEquals(emptyList<Muistutus>(), reminders(id))
+    }
+
+    @Test
+    fun update_deletedMedication_isRejected() = runTest {
+        val id = laakkeet.add(laake(), listOf(480))
+        laakkeet.delete(id)
+        val error = runCatching {
+            laakkeet.update(laake().copy(laakeId = id), listOf(EditedTime(null, 480)))
+        }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
+    fun names_areStoredTrimmed_andListedInFinnishOrder() = runTest {
+        listOf("Ödeema", "  Burana ", "äkäslääke", "Åbo").forEach {
+            laakkeet.add(laake(it), listOf(480))
+        }
+        assertEquals(
+            listOf("Burana", "Åbo", "äkäslääke", "Ödeema"),
+            laakkeet.observeActive().first().map { it.nimi }
+        )
+    }
+
+    @Test
     fun deletedMedication_nameCanBeUsedAgain() = runTest {
         val id = laakkeet.add(laake("A aamulääke"), listOf(480))
         laakkeet.delete(id)

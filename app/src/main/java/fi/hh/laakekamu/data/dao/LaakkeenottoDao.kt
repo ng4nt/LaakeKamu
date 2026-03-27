@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.Flow
 interface LaakkeenottoDao {
     /**
      * Marks a dose taken. IGNORE keeps an existing row for the same reminder and day, so a
-     * double tap or a race with the notification action can't fail. Returns the new row
-     * id, or -1 if the dose was already taken.
+     * double tap or a race with the notification action doesn't fail on the unique key.
+     * Returns the new row id, or -1 if the dose was already taken.
+     *
+     * IGNORE doesn't cover foreign keys: if the reminder was just deleted, this throws
+     * SQLiteConstraintException. Callers acting on a notification must handle that.
      */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(otto: Laakkeenotto): Long

@@ -19,7 +19,7 @@ import kotlinx.coroutines.withContext
 class AppContainer(
     context: Context,
     val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    val clock: Clock = Clock.systemDefaultZone()
+    val clock: Clock = SystemZoneClock
 ) {
     private val appContext = context.applicationContext
     private val databaseMutex = Mutex()

@@ -19,11 +19,14 @@ import fi.hh.laakekamu.domain.newReminderStart
 import fi.hh.laakekamu.domain.planEdit
 import fi.hh.laakekamu.domain.reopenAfterEnd
 import fi.hh.laakekamu.domain.validateName
+import java.text.Collator
 import java.time.Clock
 import java.time.LocalDate
+import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Room implementation of [LaakeRepository].
@@ -33,6 +36,9 @@ import kotlinx.coroutines.flow.flow
  * constraints, so this class enforces them before writing. [database] opens the
  * database lazily; [clock] gives "today" (system zone in the app, fixed in tests).
  */
+/** Finnish collation for medication names (SQLite NOCASE only folds ASCII). */
+private val FINNISH: Locale = Locale.forLanguageTag("fi-FI")
+
 class RoomLaakeRepository(
     private val database: suspend () -> AppDatabase,
     private val clock: Clock
@@ -50,8 +56,13 @@ class RoomLaakeRepository(
     }
 
     /** Medications that aren't deleted, by name. */
+    /** Medications that aren't deleted, in Finnish alphabetical order (Å, Ä, Ö after Z). */
     override fun observeActive(): Flow<List<Laake>> = flow {
         emitAll(database().laakeDao().observeActive())
+    }.map { laakkeet ->
+        // A new Collator per emission: Collator isn't thread-safe.
+        val finnish = Collator.getInstance(FINNISH)
+        laakkeet.sortedWith(compareBy(finnish) { it.nimi })
     }
 
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
@@ -74,7 +85,9 @@ class RoomLaakeRepository(
         val db = database()
         return db.withTransaction {
             requireValid(laake, times, editedId = null)
-            val laakeId = db.laakeDao().insert(laake.copy(laakeId = 0, aktiivinen = true))
+            val laakeId = db.laakeDao().insert(
+                laake.copy(laakeId = 0, nimi = laake.nimi.trim(), aktiivinen = true)
+            )
             if (laake.kuinkaUsein == KuinkaUsein.PAIVITTAIN) {
                 val start = newReminderStart(today(), laake.aloituspv)
                 times.forEach { aika ->
@@ -112,7 +125,7 @@ class RoomLaakeRepository(
             require(isValidEndDateEdit(old.lopetuspv, laake.lopetuspv, today)) {
                 "A changed lopetuspv can't be in the past"
             }
-            db.laakeDao().update(laake.copy(aktiivinen = true))
+            db.laakeDao().update(laake.copy(nimi = laake.nimi.trim(), aktiivinen = true))
 
             // Times first, against the reminders as they were...
             val current = currentJaksot(db, laake.laakeId)

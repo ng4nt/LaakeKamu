@@ -19,7 +19,7 @@ interface LaakeRepository {
     /** Dose units for the wizard's Yksikkö dropdown. */
     fun observeYksikot(): Flow<List<Yksikko>>
 
-    /** Medications that aren't deleted. */
+    /** Medications that aren't deleted, in Finnish alphabetical order. */
     fun observeActive(): Flow<List<Laake>>
 
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
