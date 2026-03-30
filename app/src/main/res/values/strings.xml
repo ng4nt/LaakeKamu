@@ -14,4 +14,25 @@
     <string name="tyhjenna">Tyhjennä</string>
     <string name="paivamaara_placeholder">pp.kk.vvvv</string>
     <string name="klo_aika">klo %1$s</string>
+
+    <!-- Common buttons -->
+    <string name="lisaa">Lisää</string>
+    <string name="takaisin">Takaisin</string>
+
+    <!-- Add/edit wizard, step 1 -->
+    <string name="laake_label">Lääke</string>
+    <string name="laake_placeholder">Kirjoita lääkkeen nimi</string>
+    <string name="tyyppi_label">Tyyppi</string>
+    <string name="tyyppi_placeholder">Valitse lääkkeen tyyppi</string>
+    <string name="annosmaara_label">Annosmäärä</string>
+    <string name="annosmaara_placeholder">Kirjoita</string>
+    <string name="yksikko_label">Yksikkö</string>
+    <string name="yksikko_placeholder">Valitse</string>
+    <string name="seuraava_vaihe">Seuraava vaihe</string>
+    <string name="virhe_nimi_puuttuu">Lääkkeen nimi puuttuu.</string>
+    <string name="virhe_nimi_liian_pitka">Nimi on liian pitkä (enintään %1$d merkkiä).</string>
+    <string name="virhe_nimi_jo_lisatty">Lääke \"%1$s\" on jo lisätty.</string>
+    <string name="virhe_tyyppi_puuttuu">Valitse lääkkeen tyyppi.</string>
+    <string name="virhe_annosmaara_puuttuu">Annosmäärä puuttuu.</string>
+    <string name="virhe_yksikko_puuttuu">Valitse yksikkö.</string>
 </resources>

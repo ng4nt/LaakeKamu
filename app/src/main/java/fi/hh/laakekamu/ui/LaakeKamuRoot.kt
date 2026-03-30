@@ -13,7 +13,9 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import fi.hh.laakekamu.ui.etusivu.EtusivuScreen
 import fi.hh.laakekamu.ui.laakelista.LaakelistaScreen
+import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeScreen
 import fi.hh.laakekamu.ui.navigation.BottomNavBar
+import fi.hh.laakekamu.ui.navigation.FormRoute
 import fi.hh.laakekamu.ui.navigation.MainDestination
 import fi.hh.laakekamu.ui.oirepaivakirja.OirepaivakirjaScreen
 
@@ -42,9 +44,14 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
             startDestination = MainDestination.ETUSIVU.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(MainDestination.LAAKELISTA.route) { LaakelistaScreen() }
+            composable(MainDestination.LAAKELISTA.route) {
+                LaakelistaScreen(onAdd = { navController.navigate(FormRoute.LISAA_LAAKE) })
+            }
             composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }
+            composable(FormRoute.LISAA_LAAKE) {
+                LisaaLaakeScreen(onClose = { navController.popBackStack() })
+            }
         }
     }
 }
