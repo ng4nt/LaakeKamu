@@ -110,7 +110,8 @@ private fun WideButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().widthIn(max = WIDE_WIDTH).heightIn(min = WIDE_HEIGHT),
+        // Cap first, then fill: the other order can't shrink a filled width.
+        modifier = modifier.widthIn(max = WIDE_WIDTH).fillMaxWidth().heightIn(min = WIDE_HEIGHT),
         enabled = enabled,
         shape = PILL,
         colors = ButtonDefaults.buttonColors(containerColor = container, contentColor = content)

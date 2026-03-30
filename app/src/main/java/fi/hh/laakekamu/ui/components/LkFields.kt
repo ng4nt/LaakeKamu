@@ -44,8 +44,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
+import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -79,9 +82,14 @@ private fun LabeledField(
     modifier: Modifier,
     field: @Composable () -> Unit
 ) {
-    Column(modifier = modifier.fillMaxWidth().widthIn(max = FIELD_WIDTH)) {
+    Column(modifier = modifier.widthIn(max = FIELD_WIDTH).fillMaxWidth()) {
         if (label != null) {
-            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            // The field itself carries the label for TalkBack, so it's read once.
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.clearAndSetSemantics {}
+            )
             Spacer(Modifier.size(LABEL_GAP))
         }
         field()
@@ -163,13 +171,31 @@ private fun ClickableField(
     showCaret: Boolean,
     role: Role,
     enabled: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    error: String? = null,
+    expanded: Boolean? = null,
+    onCollapse: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier
             .fieldBox(hasError)
             .clickable(enabled = enabled, role = role, onClick = onClick)
-            .semantics { contentDescription = "$description: ${value ?: placeholder}" }
+            .semantics {
+                contentDescription = "$description: ${value ?: placeholder}"
+                if (error != null) error(error)
+                // Dropdowns tell TalkBack whether their menu is open.
+                when (expanded) {
+                    true -> collapse {
+                        onCollapse()
+                        true
+                    }
+                    false -> expand {
+                        onClick()
+                        true
+                    }
+                    null -> Unit
+                }
+            }
             .padding(start = DROPDOWN_INSET, end = CARET_END_PADDING),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -208,7 +234,10 @@ fun <T> LkDropdown(
                 showCaret = true,
                 role = Role.DropdownList,
                 enabled = enabled,
-                onClick = { expanded = true }
+                onClick = { expanded = true },
+                error = error,
+                expanded = expanded,
+                onCollapse = { expanded = false }
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 options.forEach { option ->
@@ -251,7 +280,8 @@ fun LkDateField(
             showCaret = false,
             role = Role.Button,
             enabled = true,
-            onClick = { open = true }
+            onClick = { open = true },
+            error = error
         )
     }
     if (open) {
@@ -317,7 +347,8 @@ fun LkTimeField(
             showCaret = true,
             role = Role.Button,
             enabled = true,
-            onClick = { open = true }
+            onClick = { open = true },
+            error = error
         )
     }
     if (open) {
