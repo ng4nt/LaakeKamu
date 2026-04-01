@@ -309,15 +309,18 @@ fun LkDateField(
                     }
                 }
             ) {
-                DatePicker(
-                    state = state,
-                    title = {
-                        Text(
-                            text = stringResource(R.string.valitse_paiva),
-                            modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
-                        )
-                    }
-                )
+                // Again inside the dialog window, which resets the locale.
+                ProvideFinnishLocale {
+                    DatePicker(
+                        state = state,
+                        title = {
+                            Text(
+                                text = stringResource(R.string.valitse_paiva),
+                                modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
+                            )
+                        }
+                    )
+                }
             }
         }
     }
@@ -369,16 +372,19 @@ fun LkTimeField(
                 },
                 title = { Text(stringResource(R.string.valitse_aika)) },
                 modeToggleButton = {
-                    TimePickerDialogDefaults.DisplayModeToggle(
-                        onDisplayModeChange = {
-                            mode = if (mode == TimePickerDisplayMode.Input) {
-                                TimePickerDisplayMode.Picker
-                            } else {
-                                TimePickerDisplayMode.Input
-                            }
-                        },
-                        displayMode = mode
-                    )
+                    // The slots render in the dialog window, which resets the locale.
+                    ProvideFinnishLocale {
+                        TimePickerDialogDefaults.DisplayModeToggle(
+                            onDisplayModeChange = {
+                                mode = if (mode == TimePickerDisplayMode.Input) {
+                                    TimePickerDisplayMode.Picker
+                                } else {
+                                    TimePickerDisplayMode.Input
+                                }
+                            },
+                            displayMode = mode
+                        )
+                    }
                 },
                 dismissButton = {
                     TextButton(onClick = {
@@ -386,7 +392,9 @@ fun LkTimeField(
                     }) { Text(stringResource(R.string.peruuta)) }
                 }
             ) {
-                if (mode == TimePickerDisplayMode.Input) TimeInput(state) else TimePicker(state)
+                ProvideFinnishLocale {
+                    if (mode == TimePickerDisplayMode.Input) TimeInput(state) else TimePicker(state)
+                }
             }
         }
     }
