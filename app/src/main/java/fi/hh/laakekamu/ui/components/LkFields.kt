@@ -40,6 +40,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -59,6 +60,7 @@ import fi.hh.laakekamu.ui.format.formatTime
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
 import fi.hh.laakekamu.ui.theme.LkDanger
 import fi.hh.laakekamu.ui.theme.LkInput
+import fi.hh.laakekamu.ui.theme.LkMuted
 import fi.hh.laakekamu.ui.theme.LkPlaceholder
 import java.time.Instant
 import java.time.LocalDate
@@ -71,15 +73,22 @@ private val LABEL_GAP = 8.dp
 private val TEXT_INSET = 13.dp
 private val DROPDOWN_INSET = 9.dp
 private val CARET_SIZE = 30.dp
+
+// M3's disabled content alpha.
+private const val DISABLED_ALPHA = 0.38f
 private val CARET_END_PADDING = 12.dp
 private val ERROR_BORDER = 2.dp
 
-/** Label, field and an optional error text under it, as in the wizard and symptom forms. */
+/**
+ * Label, field and an optional error text under it, as in the wizard and symptom forms. A [hint]
+ * (e.g. the duration) shows in the same place when there's no error.
+ */
 @Composable
 private fun LabeledField(
     label: String?,
     error: String?,
     modifier: Modifier,
+    hint: String? = null,
     field: @Composable () -> Unit
 ) {
     Column(modifier = modifier.widthIn(max = FIELD_WIDTH).fillMaxWidth()) {
@@ -98,6 +107,13 @@ private fun LabeledField(
                 text = error,
                 style = MaterialTheme.typography.bodyMedium,
                 color = LkDanger,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        } else if (hint != null) {
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodyMedium,
+                color = LkMuted,
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
@@ -179,6 +195,7 @@ private fun ClickableField(
     Row(
         modifier = Modifier
             .fieldBox(hasError)
+            .alpha(if (enabled) 1f else DISABLED_ALPHA)
             .clickable(enabled = enabled, role = role, onClick = onClick)
             .semantics {
                 contentDescription = "$description: ${value ?: placeholder}"
@@ -268,10 +285,11 @@ fun LkDateField(
     onDateChange: (LocalDate?) -> Unit,
     modifier: Modifier = Modifier,
     error: String? = null,
-    clearable: Boolean = false
+    clearable: Boolean = false,
+    hint: String? = null
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
-    LabeledField(label, error, modifier) {
+    LabeledField(label, error, modifier, hint) {
         ClickableField(
             value = date?.let(::formatDate),
             placeholder = stringResource(R.string.paivamaara_placeholder),
@@ -338,7 +356,8 @@ fun LkTimeField(
     description: String,
     placeholder: String,
     modifier: Modifier = Modifier,
-    error: String? = null
+    error: String? = null,
+    enabled: Boolean = true
 ) {
     var open by rememberSaveable { mutableStateOf(false) }
     LabeledField(label = null, error = error, modifier = modifier) {
@@ -349,12 +368,12 @@ fun LkTimeField(
             hasError = error != null,
             showCaret = true,
             role = Role.Button,
-            enabled = true,
+            enabled = enabled,
             onClick = { open = true },
             error = error
         )
     }
-    if (open) {
+    if (open && enabled) {
         ProvideFinnishLocale {
             val state = rememberTimePickerState(
                 initialHour = (minuteOfDay ?: 0) / 60,

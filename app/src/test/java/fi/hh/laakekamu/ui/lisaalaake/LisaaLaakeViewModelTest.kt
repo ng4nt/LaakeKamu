@@ -3,9 +3,12 @@ package fi.hh.laakekamu.ui.lisaalaake
 import androidx.lifecycle.SavedStateHandle
 import fi.hh.laakekamu.data.FakeLaakeRepository
 import fi.hh.laakekamu.data.entity.Laake
+import fi.hh.laakekamu.domain.Kesto
 import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.NameError
+import java.time.Clock
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -15,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -34,8 +38,12 @@ class LisaaLaakeViewModelTest {
         Dispatchers.resetMain()
     }
 
+    private val today = LocalDate.of(2025, 12, 18)
+    private val zone = ZoneId.of("Europe/Helsinki")
+    private val clock = Clock.fixed(today.atTime(10, 0).atZone(zone).toInstant(), zone)
+
     private fun viewModel(handle: SavedStateHandle = SavedStateHandle()) =
-        LisaaLaakeViewModel(handle, repository)
+        LisaaLaakeViewModel(handle, repository, clock)
 
     /** Keeps uiState collected, as the screen does. */
     private fun kotlinx.coroutines.test.TestScope.collect(vm: LisaaLaakeViewModel) {
@@ -125,6 +133,156 @@ class LisaaLaakeViewModelTest {
 
         assertEquals(1, vm.uiState.value.step)
         assertEquals("5", vm.uiState.value.annosmaara)
+    }
+
+    // Step 2: times, frequency and dates
+
+    @Test
+    fun step2_startsWithOneEmptyTime_noFrequency_andTodayAsTheStart() = runTest {
+        val vm = viewModel().also { collect(it) }
+
+        val state = vm.uiState.value
+        assertEquals(listOf<Int?>(null), state.ajat)
+        assertNull(state.kuinkaUsein)
+        assertEquals(today, state.aloituspv)
+        assertNull(state.lopetuspv)
+        assertEquals(Kesto.Kaytossa(1), state.kesto)
+    }
+
+    @Test
+    fun duplicateTime_isRejected_andTheRowKeepsItsValue() = runTest {
+        val vm = viewModel().also { collect(it) }
+        vm.onAikaChange(0, 480)
+        vm.onLisaaAika()
+        vm.onAikaChange(1, 1200)
+
+        vm.onAikaChange(1, 480)
+
+        assertEquals(listOf<Int?>(480, 1200), vm.uiState.value.ajat)
+        assertEquals(mapOf(1 to AikaError.JoLisatty(480)), vm.uiState.value.step2Errors.ajat)
+
+        vm.onAikaChange(1, 1260)
+
+        assertEquals(listOf<Int?>(480, 1260), vm.uiState.value.ajat)
+        assertTrue(vm.uiState.value.step2Errors.ajat.isEmpty())
+    }
+
+    @Test
+    fun removingARow_keepsTheOtherRowsErrors_onTheirRows() = runTest {
+        val vm = viewModel().also { collect(it) }
+        vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
+        vm.onAikaChange(0, 480)
+        vm.onLisaaAika()
+        vm.onLisaaAika()
+        vm.onDone()
+        assertEquals(setOf(1, 2), vm.uiState.value.step2Errors.ajat.keys)
+
+        vm.onPoistaAika(1)
+
+        assertEquals(listOf<Int?>(480, null), vm.uiState.value.ajat)
+        assertEquals(mapOf(1 to AikaError.Puuttuu), vm.uiState.value.step2Errors.ajat)
+    }
+
+    @Test
+    fun theLastRowCantBeRemoved() = runTest {
+        val vm = viewModel().also { collect(it) }
+        vm.onAikaChange(0, 480)
+
+        vm.onPoistaAika(0)
+
+        assertEquals(listOf<Int?>(480), vm.uiState.value.ajat)
+    }
+
+    @Test
+    fun tarvittaessa_clearsAndDisablesTheTimes() = runTest {
+        val vm = viewModel().also { collect(it) }
+        vm.onAikaChange(0, 480)
+        vm.onLisaaAika()
+        vm.onAikaChange(1, 1200)
+
+        vm.onKuinkaUseinSelect(KuinkaUsein.TARVITTAESSA)
+        vm.onLisaaAika()
+
+        val state = vm.uiState.value
+        assertEquals(listOf<Int?>(null), state.ajat)
+        assertFalse(state.ajatEnabled)
+        assertTrue(vm.onDone())
+    }
+
+    @Test
+    fun endBeforeStart_isAnError_assoonAsItIsPicked_andHasNoDurationHint() = runTest {
+        val vm = viewModel().also { collect(it) }
+
+        vm.onLopetuspvChange(today.minusDays(1))
+
+        assertTrue(vm.uiState.value.step2Errors.lopetuspv)
+        assertNull(vm.uiState.value.kesto)
+
+        vm.onAloituspvChange(today.minusDays(3))
+
+        assertFalse(vm.uiState.value.step2Errors.lopetuspv)
+        assertEquals(Kesto.Paattynyt, vm.uiState.value.kesto)
+    }
+
+    @Test
+    fun durationHint_followsTheL6Labels() = runTest {
+        val vm = viewModel().also { collect(it) }
+
+        vm.onLopetuspvChange(today.plusDays(13))
+        assertEquals(Kesto.Jaljella(14), vm.uiState.value.kesto)
+
+        vm.onAloituspvChange(today.plusDays(2))
+        assertEquals(Kesto.Alkaa(today.plusDays(2)), vm.uiState.value.kesto)
+
+        vm.onLopetuspvChange(null)
+        assertEquals(Kesto.Alkaa(today.plusDays(2)), vm.uiState.value.kesto)
+    }
+
+    @Test
+    fun done_withoutFrequencyOrTimes_showsTheErrors() = runTest {
+        val vm = viewModel().also { collect(it) }
+
+        assertFalse(vm.onDone())
+        assertTrue(vm.uiState.value.step2Errors.kuinkaUsein)
+
+        vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
+        assertFalse(vm.uiState.value.step2Errors.kuinkaUsein)
+        assertFalse(vm.onDone())
+        assertEquals(mapOf(0 to AikaError.Puuttuu), vm.uiState.value.step2Errors.ajat)
+    }
+
+    @Test
+    fun done_withAValidDailyForm_hasNoErrors() = runTest {
+        val vm = viewModel().also { collect(it) }
+        vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
+        vm.onAikaChange(0, 480)
+        vm.onLisaaAika()
+        vm.onAikaChange(1, 1200)
+        vm.onLopetuspvChange(today.plusDays(9))
+
+        assertTrue(vm.onDone())
+        assertTrue(vm.uiState.value.step2Errors.isEmpty)
+    }
+
+    @Test
+    fun step2Values_areRestoredAfterProcessDeath() = runTest {
+        val handle = SavedStateHandle()
+        val first = viewModel(handle).also { collect(it) }
+        first.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
+        first.onAikaChange(0, 480)
+        first.onLisaaAika()
+        first.onAloituspvChange(today.plusDays(1))
+        first.onLopetuspvChange(today.plusDays(30))
+
+        val restored =
+            viewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }))
+        collect(restored)
+
+        val state = restored.uiState.value
+        assertEquals(listOf<Int?>(480, null), state.ajat)
+        assertEquals(KuinkaUsein.PAIVITTAIN, state.kuinkaUsein)
+        assertEquals(today.plusDays(1), state.aloituspv)
+        assertEquals(today.plusDays(30), state.lopetuspv)
     }
 
     private fun fillValid(vm: LisaaLaakeViewModel, nimi: String = "A aamulääke") {

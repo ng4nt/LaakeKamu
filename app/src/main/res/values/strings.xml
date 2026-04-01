@@ -35,4 +35,27 @@
     <string name="virhe_tyyppi_puuttuu">Valitse lääkkeen tyyppi.</string>
     <string name="virhe_annosmaara_puuttuu">Annosmäärä puuttuu.</string>
     <string name="virhe_yksikko_puuttuu">Valitse yksikkö.</string>
+
+    <!-- Add/edit wizard, step 2 -->
+    <string name="aika_label">Aika</string>
+    <string name="aika_rivi">Aika %1$d</string>
+    <string name="lisaa_aika">+ Lisää aika</string>
+    <string name="poista_aika">Poista aika %1$d</string>
+    <string name="kuinka_usein_label">Kuinka usein otat lääkkeen?</string>
+    <string name="kuinka_usein_placeholder">Valitse</string>
+    <string name="paivittain">Päivittäin</string>
+    <string name="tarvittaessa">Tarvittaessa</string>
+    <string name="aloituspaiva_label">Lääkkeen aloituspäivä</string>
+    <string name="lopetuspaiva_label">Lääkkeen lopetuspäivä</string>
+    <string name="valmis">Valmis!</string>
+    <string name="virhe_aika_puuttuu">Valitse aika.</string>
+    <string name="virhe_aika_jo_lisatty">Aika klo %1$s on jo lisätty.</string>
+    <string name="virhe_kuinka_usein_puuttuu">Valitse, kuinka usein otat lääkkeen.</string>
+    <string name="virhe_lopetus_ennen_aloitusta">Lopetuspäivä ei voi olla ennen aloituspäivää.</string>
+
+    <!-- duration labels: wizard hint and medication list -->
+    <string name="kesto_alkaa">alkaa %1$s</string>
+    <string name="kesto_jaljella">vielä %1$d pv</string>
+    <string name="kesto_paattynyt">päättynyt</string>
+    <string name="kesto_kaytossa">Käytössä %1$d pv</string>
 </resources>
