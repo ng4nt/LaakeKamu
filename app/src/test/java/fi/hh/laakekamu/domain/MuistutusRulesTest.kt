@@ -251,4 +251,98 @@ class MuistutusRulesTest {
             endAll(current, today, takenToday = setOf(1L))
         )
     }
+
+    @Test
+    fun moveStart_futureStartWithAStrayTakenRow_movesIt() {
+        // Only a reminder that started today can end today.
+        assertEquals(
+            listOf(Muutos.SiirraAlku(1, today.plusDays(3))),
+            moveStart(listOf(jakso(1, 480, tomorrow)), today.plusDays(3), today, setOf(1L))
+        )
+    }
+
+    @Test
+    fun planEdit_editedTimeOfARemovedTakenReminder_keepsThatReminder() {
+        // 8.00 not taken, 9.00 taken; 8.00 edited to 9.00 and 9.00 removed (review a).
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(1, yesterday)),
+            planEdit(current, listOf(EditedTime(1, 540)), today, today.minusDays(10), setOf(2L))
+        )
+    }
+
+    @Test
+    fun planEdit_twoEditedRowsMovingOntoEachOthersTimes_keepTheTakenDose() {
+        // 8.00 taken, 9.00; 8.00 edited to 10.00 and 9.00 to 8.00 (review b).
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(2, yesterday), Muutos.Lisaa(600, today)),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 600), EditedTime(2, 480)),
+                today,
+                today.minusDays(10),
+                takenToday = setOf(1L)
+            )
+        )
+    }
+
+    @Test
+    fun planEdit_swappedTimes_changeNothing() {
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            emptyList<Muutos>(),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 540), EditedTime(2, 480)),
+                today,
+                today.minusDays(10),
+                emptySet()
+            )
+        )
+    }
+
+    @Test
+    fun planEdit_timeOfAReminderThatEndsToday_startsTomorrow() {
+        // Earlier today 8.00 was taken and then changed to 10.00 (8.00 ends today); now 8.00 is
+        // added back. Today already has its 8.00 dose.
+        val current = listOf(jakso(2, 600, tomorrow))
+        assertEquals(
+            listOf(Muutos.Lisaa(480, tomorrow)),
+            planEdit(
+                current,
+                listOf(EditedTime(2, 600), EditedTime(null, 480)),
+                today,
+                today.minusDays(10),
+                takenToday = emptySet(),
+                endsToday = setOf(480)
+            )
+        )
+    }
+
+    // An end planned after the medication had already ended
+
+    @Test
+    fun cap_endAfterAnOldMedicationEnd_movesBackToIt_orDeletesAReminderThatStartedAfterIt() {
+        val oldEnd = today.minusDays(6)
+        val current = listOf(jakso(1, 480, today.minusDays(30)), jakso(2, 720, today.minusDays(3)))
+        val planned = listOf(
+            Muutos.Paata(1, yesterday),
+            Muutos.Lisaa(540, today),
+            Muutos.Paata(2, today)
+        )
+        assertEquals(
+            listOf(Muutos.Paata(1, oldEnd), Muutos.Lisaa(540, today), Muutos.Poista(2)),
+            capToMedicationEnd(planned, current, oldEnd, today)
+        )
+    }
+
+    @Test
+    fun cap_changesNothingWhileTheMedicationRuns() {
+        val current = listOf(jakso(1, 480, today.minusDays(30)))
+        val planned = listOf(Muutos.Paata(1, yesterday))
+        assertEquals(planned, capToMedicationEnd(planned, current, null, today))
+        assertEquals(planned, capToMedicationEnd(planned, current, today, today))
+        assertEquals(planned, capToMedicationEnd(planned, current, yesterday, today))
+    }
 }

@@ -73,9 +73,9 @@ fun changeTime(
 
 /**
  * The medication's start date was edited. Current reminders that haven't started before
- * today move to max(today, [newAloituspv]). If today's dose was already taken and the start
- * moves into the future, the reminder ends today and a new one starts on the new date, so the
- * taken row stays inside its reminder's validity. (The dose is then no longer due today, because
+ * today move to max(today, [newAloituspv]). If a reminder started today, its dose was already
+ * taken and the start moves into the future, the reminder ends today and a new one starts on the
+ * new date, so the taken row stays inside its reminder's validity. (The dose is then no longer due today, because
  * the medication now starts later, so Home hides it; the diary still lists the taken row.)
  * Reminders that started earlier are left alone (documented limitation: existing history isn't
  * rewritten).
@@ -91,7 +91,8 @@ fun moveStart(
         .filter { it.voimassaAsti == null && !it.voimassaAlkaen.isBefore(today) }
         .filter { it.voimassaAlkaen != newStart }
         .flatMap { jakso ->
-            if (jakso.id in takenToday) {
+            // A reminder that starts later can't end today; a row for it is a stray.
+            if (jakso.id in takenToday && jakso.voimassaAlkaen == today) {
                 listOf(Muutos.Paata(jakso.id, today), Muutos.Lisaa(jakso.aika, newStart))
             } else {
                 listOf(Muutos.SiirraAlku(jakso.id, newStart))
@@ -101,41 +102,49 @@ fun moveStart(
 
 /**
  * Plans saving the edit wizard's time list against the [current] reminders
- * (voimassa_asti IS NULL). Unchanged times stay, edited times use [changeTime], removed times
- * use [endReminder], and new times start at [newReminderStart]. [takenToday] holds the ids of
- * reminders whose dose is taken today.
+ * (voimassa_asti IS NULL). [takenToday] holds the ids of reminders whose dose is taken today.
  *
- * A new row with the same time as a removed or edited reminder keeps that reminder instead of
- * creating a duplicate dose for today; an id that isn't a current reminder (e.g. a stale one
- * restored from saved state) counts as a new time.
+ * Times are matched first: a current reminder whose time is still in the list stays as it is,
+ * whichever row the time is on, so moving, swapping or re-adding times never gives two doses at
+ * the same time today. A reminder that lost its time changes to its own row's
+ * new time by [changeTime] when no other reminder has that time, otherwise it ends by
+ * [endReminder]. Remaining times start at [newReminderStart], except a time in [endsToday] (a
+ * reminder at that time is still valid today, its dose already taken), which starts tomorrow.
+ * An id that isn't a current reminder (e.g. a stale one restored from saved state) only brings
+ * its time.
  */
 fun planEdit(
     current: List<Muistutusjakso>,
     edited: List<EditedTime>,
     today: LocalDate,
     aloituspv: LocalDate,
-    takenToday: Set<Long>
+    takenToday: Set<Long>,
+    endsToday: Set<Int> = emptySet()
 ): List<Muutos> {
-    val currentIds = current.map { it.id }.toSet()
-    val editedById = edited.filter { it.id in currentIds }.associateBy { it.id }
-    val newTimes = edited.filter { it.id !in currentIds }.map { it.aika }.toMutableList()
-    val changes = current.flatMap { jakso ->
-        val row = editedById[jakso.id]
-        when {
-            // Edited to another time while its old time was added back as a new row: keep this
-            // reminder and add the edited time as the new one instead.
-            row != null && row.aika != jakso.aika && newTimes.remove(jakso.aika) -> {
-                newTimes.add(row.aika)
-                emptyList()
-            }
-            row != null -> changeTime(jakso, row.aika, today, jakso.id in takenToday, aloituspv)
-            // The row was removed but the same time was added back: keep the reminder as is.
-            newTimes.remove(jakso.aika) -> emptyList()
-            else -> listOf(endReminder(jakso, today, jakso.id in takenToday))
+    val kept = mutableSetOf<Long>()
+    val missing = mutableListOf<Int>()
+    edited.map { it.aika }.distinct().forEach { aika ->
+        val match = current.firstOrNull { it.aika == aika && it.id !in kept }
+        if (match != null) kept += match.id else missing += aika
+    }
+    val rowTimes = edited.filter { it.id != null }.associate { it.id to it.aika }
+    val changes = current.filter { it.id !in kept }.flatMap { jakso ->
+        val newAika = rowTimes[jakso.id]
+        val taken = jakso.id in takenToday
+        if (newAika != null && missing.remove(newAika)) {
+            changeTime(jakso, newAika, today, taken, aloituspv)
+        } else {
+            listOf(endReminder(jakso, today, taken))
         }
     }
-    val additions = newTimes.map { Muutos.Lisaa(it, newReminderStart(today, aloituspv)) }
-    return changes + additions
+    val additions = missing.map { Muutos.Lisaa(it, newReminderStart(today, aloituspv)) }
+    return (changes + additions).map { muutos ->
+        if (muutos is Muutos.Lisaa && muutos.aika in endsToday && muutos.voimassaAlkaen == today) {
+            muutos.copy(voimassaAlkaen = today.plusDays(1))
+        } else {
+            muutos
+        }
+    }
 }
 
 /**
@@ -173,6 +182,30 @@ fun reopenAfterEnd(
             }
             listOf(end, Muutos.Lisaa(jakso.aika, restart))
         }
+}
+
+/**
+ * A medication that ended before today ([lopetuspv], as stored before this save) has no due
+ * days after its end, so an end that [changes] put later is moved back to [lopetuspv], and a
+ * reminder that starts after it is deleted (it never had a due day). Otherwise extending the end
+ * date later would make the days between the old end and this save due. [current]
+ * are the reminders the changes were planned against.
+ */
+fun capToMedicationEnd(
+    changes: List<Muutos>,
+    current: List<Muistutusjakso>,
+    lopetuspv: LocalDate?,
+    today: LocalDate
+): List<Muutos> {
+    if (lopetuspv == null || !lopetuspv.isBefore(today)) return changes
+    val byId = current.associateBy { it.id }
+    return changes.map { muutos ->
+        when {
+            muutos !is Muutos.Paata || !muutos.voimassaAsti.isAfter(lopetuspv) -> muutos
+            byId.getValue(muutos.id).voimassaAlkaen.isAfter(lopetuspv) -> Muutos.Poista(muutos.id)
+            else -> Muutos.Paata(muutos.id, lopetuspv)
+        }
+    }
 }
 
 /** Ends every current reminder (medication deleted, or switched to Tarvittaessa). */

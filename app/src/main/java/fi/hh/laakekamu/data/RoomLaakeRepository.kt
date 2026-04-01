@@ -10,6 +10,7 @@ import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.Muistutusjakso
 import fi.hh.laakekamu.domain.Muutos
 import fi.hh.laakekamu.domain.NameError
+import fi.hh.laakekamu.domain.capToMedicationEnd
 import fi.hh.laakekamu.domain.endAll
 import fi.hh.laakekamu.domain.isValidDateRange
 import fi.hh.laakekamu.domain.isValidEndDateEdit
@@ -36,9 +37,6 @@ import kotlinx.coroutines.flow.map
  * constraints, so this class enforces them before writing. [database] opens the
  * database lazily; [clock] gives "today" (system zone in the app, fixed in tests).
  */
-/** Finnish collation for medication names (SQLite NOCASE only folds ASCII). */
-private val FINNISH: Locale = Locale.forLanguageTag("fi-FI")
-
 class RoomLaakeRepository(
     private val database: suspend () -> AppDatabase,
     private val clock: Clock
@@ -55,7 +53,6 @@ class RoomLaakeRepository(
         emitAll(database().valintaDao().observeYksikot())
     }
 
-    /** Medications that aren't deleted, by name. */
     /** Medications that aren't deleted, in Finnish alphabetical order (Å, Ä, Ö after Z). */
     override fun observeActive(): Flow<List<Laake>> = flow {
         emitAll(database().laakeDao().observeActive())
@@ -127,20 +124,26 @@ class RoomLaakeRepository(
             }
             db.laakeDao().update(laake.copy(nimi = laake.nimi.trim(), aktiivinen = true))
 
+            // Every end stays inside the medication's period as it was.
+            fun capped(changes: List<Muutos>, against: List<Muistutusjakso>) =
+                capToMedicationEnd(changes, against, old.lopetuspv, today)
+
             // Times first, against the reminders as they were...
             val current = currentJaksot(db, laake.laakeId)
+            val taken = takenToday(db, current, today)
             val timeChanges = if (laake.kuinkaUsein == KuinkaUsein.TARVITTAESSA) {
-                endAll(current, today, takenToday(db, current, today))
+                endAll(current, today, taken)
             } else {
-                planEdit(current, times, today, laake.aloituspv, takenToday(db, current, today))
+                val endsToday = endsToday(db, laake.laakeId, today)
+                planEdit(current, times, today, laake.aloituspv, taken, endsToday)
             }
-            apply(db, laake.laakeId, current, timeChanges)
+            apply(db, laake.laakeId, current, capped(timeChanges, current))
             // ...then a start-date change, against the reminders as they are now.
             if (laake.aloituspv != old.aloituspv) {
                 val afterTimes = currentJaksot(db, laake.laakeId)
                 val moves =
                     moveStart(afterTimes, laake.aloituspv, today, takenToday(db, afterTimes, today))
-                apply(db, laake.laakeId, afterTimes, moves)
+                apply(db, laake.laakeId, afterTimes, capped(moves, afterTimes))
             }
             // ...and last, reopening after an old end date, so the gap days stay not due.
             val afterStart = currentJaksot(db, laake.laakeId)
@@ -161,7 +164,8 @@ class RoomLaakeRepository(
             db.laakeDao().update(laake.copy(aktiivinen = false))
             val today = today()
             val current = currentJaksot(db, laakeId)
-            apply(db, laakeId, current, endAll(current, today, takenToday(db, current, today)))
+            val ends = endAll(current, today, takenToday(db, current, today))
+            apply(db, laakeId, current, capToMedicationEnd(ends, current, laake.lopetuspv, today))
         }
     }
 
@@ -195,6 +199,11 @@ class RoomLaakeRepository(
             }
         ).toSet()
     }
+
+    /** Times of the medication's reminders that end today, so are still valid today. */
+    private suspend fun endsToday(db: AppDatabase, laakeId: Long, today: LocalDate): Set<Int> =
+        db.muistutusDao().getByLaake(laakeId).filter { it.voimassaAsti == today }.map { it.aika }
+            .toSet()
 
     /** Writes an change set. [current] are the rows the changes were planned against. */
     private suspend fun apply(
@@ -235,3 +244,6 @@ class RoomLaakeRepository(
         }
     }
 }
+
+/** Finnish collation for medication names (SQLite NOCASE only folds ASCII). */
+private val FINNISH: Locale = Locale.forLanguageTag("fi-FI")

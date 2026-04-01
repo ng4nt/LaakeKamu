@@ -196,6 +196,93 @@ class RepositoryTest {
     }
 
     @Test
+    fun update_timeChangedWhileReopening_keepsTheGapDaysOutOfTheOldReminder() = runTest {
+        // One save: the end is cleared and 8.00 changed to 9.00.
+        val oldEnd = today.minusDays(5)
+        val id = laakkeet.add(laake().copy(lopetuspv = oldEnd), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val old = oldReminder(id, 480)
+
+        laakkeet.update(laake().copy(laakeId = id, lopetuspv = null), listOf(EditedTime(old, 540)))
+
+        val rows = reminders(id)
+        assertEquals(oldEnd, rows.single { it.muistutusId == old }.voimassaAsti)
+        val current = rows.single { it.voimassaAsti == null }
+        assertEquals(540, current.aika)
+        assertEquals(today, current.voimassaAlkaen)
+    }
+
+    @Test
+    fun update_timeChangedAfterTheEnd_thenReopened_keepsTheGapDaysOut() = runTest {
+        // Two saves: the time changes while the medication has ended, the end is
+        // cleared in a later save.
+        val oldEnd = today.minusDays(5)
+        val id = laakkeet.add(laake().copy(lopetuspv = oldEnd), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val old = oldReminder(id, 480)
+
+        laakkeet.update(
+            laake().copy(laakeId = id, lopetuspv = oldEnd),
+            listOf(EditedTime(old, 540))
+        )
+        val changed = reminders(id).single { it.voimassaAsti == null }.muistutusId
+        val later = today.plusDays(2)
+        val laterClock = Clock.fixed(later.atTime(10, 0).atZone(zone).toInstant(), zone)
+        RoomLaakeRepository({ db }, laterClock)
+            .update(laake().copy(laakeId = id), listOf(EditedTime(changed, 540)))
+
+        val rows = reminders(id)
+        assertEquals(oldEnd, rows.single { it.muistutusId == old }.voimassaAsti)
+        // Nothing covers the gap between the old end and the reopening day.
+        assertTrue(
+            rows.none {
+                it.voimassaAlkaen.isAfter(oldEnd) &&
+                    it.voimassaAlkaen.isBefore(later)
+            }
+        )
+        assertEquals(later, rows.single { it.voimassaAsti == null }.voimassaAlkaen)
+    }
+
+    @Test
+    fun update_asNeededWhileReopening_endsTheReminderAtTheOldEnd() = runTest {
+        val oldEnd = today.minusDays(5)
+        val id = laakkeet.add(laake().copy(lopetuspv = oldEnd), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val old = oldReminder(id, 480)
+
+        laakkeet.update(
+            laake(kuinkaUsein = KuinkaUsein.TARVITTAESSA).copy(laakeId = id),
+            emptyList()
+        )
+
+        assertEquals(oldEnd, reminders(id).single { it.muistutusId == old }.voimassaAsti)
+    }
+
+    @Test
+    fun update_timeReAddedOnTheDayItWasTakenAndChanged_startsTomorrow() = runTest {
+        // 8.00 taken and changed to 10.00, then 8.00 added back the same day.
+        val id = laakkeet.add(laake(), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val first = oldReminder(id, 480)
+        take(first, today)
+        laakkeet.update(laake().copy(laakeId = id), listOf(EditedTime(first, 600)))
+        val ten = reminders(id).single { it.voimassaAsti == null }.muistutusId
+
+        laakkeet.update(
+            laake().copy(laakeId = id),
+            listOf(EditedTime(ten, 600), EditedTime(null, 480))
+        )
+
+        val validToday = reminders(id).filter {
+            !it.voimassaAlkaen.isAfter(today) &&
+                (it.voimassaAsti == null || !it.voimassaAsti!!.isBefore(today))
+        }
+        assertEquals(listOf(first), validToday.map { it.muistutusId })
+        val eight = reminders(id).single { it.voimassaAsti == null && it.aika == 480 }
+        assertEquals(today.plusDays(1), eight.voimassaAlkaen)
+    }
+
+    @Test
     fun update_endDateMovedIntoThePast_isRejected() = runTest {
         val id = laakkeet.add(laake(), listOf(480))
         val reminder = reminders(id).single().muistutusId
