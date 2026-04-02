@@ -9,6 +9,7 @@ import fi.hh.laakekamu.domain.NameError
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -42,8 +43,10 @@ class LisaaLaakeViewModelTest {
     private val zone = ZoneId.of("Europe/Helsinki")
     private val clock = Clock.fixed(today.atTime(10, 0).atZone(zone).toInstant(), zone)
 
-    private fun viewModel(handle: SavedStateHandle = SavedStateHandle()) =
-        LisaaLaakeViewModel(handle, repository, clock)
+    private fun viewModel(
+        handle: SavedStateHandle = SavedStateHandle(),
+        repo: FakeLaakeRepository = repository
+    ) = LisaaLaakeViewModel(handle, repo, clock)
 
     /** Keeps uiState collected, as the screen does. */
     private fun kotlinx.coroutines.test.TestScope.collect(vm: LisaaLaakeViewModel) {
@@ -116,9 +119,9 @@ class LisaaLaakeViewModelTest {
         collect(restored)
 
         val state = restored.uiState.value
-        assertEquals("A aamulääke", state.nimi)
+        assertEquals("A aamulääke", restored.nimi)
         assertEquals(1L, state.tyyppiId)
-        assertEquals("5", state.annosmaara)
+        assertEquals("5", restored.annosmaara)
         assertEquals("mg", state.yksikko)
         assertEquals(2, state.step)
     }
@@ -132,7 +135,45 @@ class LisaaLaakeViewModelTest {
         vm.onBackToStep1()
 
         assertEquals(1, vm.uiState.value.step)
-        assertEquals("5", vm.uiState.value.annosmaara)
+        assertEquals("5", vm.annosmaara)
+    }
+
+    @Test
+    fun typedText_isThereAtOnce_withoutCollecting() {
+        // Text fields read Compose state, not the flow.
+        val vm = viewModel()
+        vm.onNimiChange("Bu")
+        vm.onNimiChange("Bur")
+        assertEquals("Bur", vm.nimi)
+    }
+
+    @Test
+    fun aFailedChoiceQuery_showsTheError_andTheFormStaysLive() = runTest {
+        // The error must not end the whole state flow.
+        val vm = viewModel(repo = FakeLaakeRepository(failChoices = true)).also { collect(it) }
+
+        assertTrue(vm.uiState.value.loadError)
+        vm.onTyyppiSelect(2L)
+        vm.onAikaChange(0, 480)
+
+        assertEquals(2L, vm.uiState.value.tyyppiId)
+        assertEquals(listOf<Int?>(480), vm.uiState.value.ajat)
+    }
+
+    @Test
+    fun editingWhileTheNameIsChecked_dropsThatCheck() = runTest {
+        // A stale result must not open step 2 or bring back a fixed error.
+        val vm = viewModel().also { collect(it) }
+        fillValid(vm)
+        val gate = CompletableDeferred<Unit>()
+        repository.nameErrorGate = gate
+
+        vm.onNext()
+        vm.onNimiChange("")
+        gate.complete(Unit)
+
+        assertEquals(1, vm.uiState.value.step)
+        assertNull(vm.uiState.value.errors.nimi)
     }
 
     // Step 2: times, frequency and dates

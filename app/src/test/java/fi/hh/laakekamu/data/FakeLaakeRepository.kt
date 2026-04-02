@@ -7,20 +7,31 @@ import fi.hh.laakekamu.data.entity.Yksikko
 import fi.hh.laakekamu.domain.EditedTime
 import fi.hh.laakekamu.domain.NameError
 import fi.hh.laakekamu.domain.validateName
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory [LaakeRepository] for ViewModel unit tests. Uses the real name rule. */
 class FakeLaakeRepository(
     val tyypit: List<Tyyppi> = listOf(Tyyppi(1, "tabletti"), Tyyppi(2, "kapseli")),
-    val yksikot: List<Yksikko> = listOf(Yksikko("mg"), Yksikko("ml"))
+    val yksikot: List<Yksikko> = listOf(Yksikko("mg"), Yksikko("ml")),
+    /** The type query fails, as when the database can't be opened. */
+    private val failChoices: Boolean = false
 ) : LaakeRepository {
     val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
     val added = mutableListOf<Pair<Laake, List<Int>>>()
 
-    override fun observeTyypit(): Flow<List<Tyyppi>> = flowOf(tyypit)
+    /** When set, [nameError] waits for it, so a test can act while the name is checked. */
+    var nameErrorGate: CompletableDeferred<Unit>? = null
+
+    override fun observeTyypit(): Flow<List<Tyyppi>> = if (failChoices) {
+        flow { throw IllegalStateException("database unavailable") }
+    } else {
+        flowOf(tyypit)
+    }
 
     override fun observeYksikot(): Flow<List<Yksikko>> = flowOf(yksikot)
 
@@ -30,7 +41,12 @@ class FakeLaakeRepository(
 
     override suspend fun currentTimes(laakeId: Long): List<Muistutus> = emptyList()
 
-    override suspend fun nameError(name: String, editedId: Long?): NameError? = validateName(
+    override suspend fun nameError(name: String, editedId: Long?): NameError? {
+        nameErrorGate?.await()
+        return nameErrorFor(name, editedId)
+    }
+
+    private fun nameErrorFor(name: String, editedId: Long?): NameError? = validateName(
         name,
         laakkeet.value.filter {
             it.aktiivinen

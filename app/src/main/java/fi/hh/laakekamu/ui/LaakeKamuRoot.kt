@@ -45,7 +45,12 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(MainDestination.LAAKELISTA.route) {
-                LaakelistaScreen(onAdd = { navController.navigate(FormRoute.LISAA_LAAKE) })
+                LaakelistaScreen(
+                    onAdd = {
+                        // A double tap mustn't push two wizards.
+                        navController.navigate(FormRoute.LISAA_LAAKE) { launchSingleTop = true }
+                    }
+                )
             }
             composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }

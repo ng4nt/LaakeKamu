@@ -35,6 +35,7 @@
     <string name="virhe_tyyppi_puuttuu">Valitse lääkkeen tyyppi.</string>
     <string name="virhe_annosmaara_puuttuu">Annosmäärä puuttuu.</string>
     <string name="virhe_yksikko_puuttuu">Valitse yksikkö.</string>
+    <string name="virhe_lataus">Lääketyyppejä ja yksiköitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
 
     <!-- Add/edit wizard, step 2 -->
     <string name="aika_label">Aika</string>

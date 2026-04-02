@@ -44,6 +44,7 @@ import fi.hh.laakekamu.ui.components.LkTextField
 import fi.hh.laakekamu.ui.components.LkTimeField
 import fi.hh.laakekamu.ui.format.formatTime
 import fi.hh.laakekamu.ui.format.kestoTeksti
+import fi.hh.laakekamu.ui.theme.LkDanger
 import fi.hh.laakekamu.ui.theme.LkOnLight
 import fi.hh.laakekamu.ui.theme.LkPrimary
 
@@ -88,9 +89,19 @@ private fun Step1(
     modifier: Modifier
 ) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.loadError) {
+            // The full error screen comes with the database error handling.
+            Text(
+                text = stringResource(R.string.virhe_lataus),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LkDanger,
+                modifier = Modifier.widthIn(max = FORM_WIDTH).fillMaxWidth()
+            )
+            Spacer(Modifier.height(FIELD_GAP))
+        }
         LkTextField(
             label = stringResource(R.string.laake_label),
-            value = state.nimi,
+            value = viewModel.nimi,
             onValueChange = viewModel::onNimiChange,
             placeholder = stringResource(R.string.laake_placeholder),
             error = nameErrorText(state.errors.nimi)
@@ -108,7 +119,7 @@ private fun Step1(
         Spacer(Modifier.height(FIELD_GAP))
         LkTextField(
             label = stringResource(R.string.annosmaara_label),
-            value = state.annosmaara,
+            value = viewModel.annosmaara,
             onValueChange = viewModel::onAnnosmaaraChange,
             placeholder = stringResource(R.string.annosmaara_placeholder),
             error = if (state.errors.annosmaara) {

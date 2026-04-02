@@ -1,5 +1,8 @@
 package fi.hh.laakekamu.ui.lisaalaake
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
@@ -18,6 +21,7 @@ import fi.hh.laakekamu.domain.isValidDateRange
 import fi.hh.laakekamu.domain.kestoOf
 import java.time.Clock
 import java.time.LocalDate
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,9 +62,7 @@ data class Step2Errors(
 /** Everything the add/edit wizard shows. */
 data class LisaaLaakeUiState(
     val step: Int = 1,
-    val nimi: String = "",
     val tyyppiId: Long? = null,
-    val annosmaara: String = "",
     val yksikko: String? = null,
     val tyypit: List<Tyyppi> = emptyList(),
     val yksikot: List<Yksikko> = emptyList(),
@@ -73,7 +75,7 @@ data class LisaaLaakeUiState(
     /** The duration hint under Lopetuspäivä; null while the dates are invalid. */
     val kesto: Kesto? = null,
     val step2Errors: Step2Errors = Step2Errors(),
-    /** The choice lists couldn't be loaded (e.g. database unavailable). */
+    /** The choice lists couldn't be loaded (e.g. database unavailable); the form still works. */
     val loadError: Boolean = false
 ) {
     /** Tarvittaessa has no times, so the time rows are disabled. */
@@ -95,15 +97,24 @@ class LisaaLaakeViewModel(
 ) : ViewModel() {
     private val errors = MutableStateFlow(Step1Errors())
     private val step2Errors = MutableStateFlow(Step2Errors())
+    private var validation: Job? = null
+
+    /**
+     * The typed texts are Compose state, so a text field gets its new value in the same frame
+     * (a round trip through flows can drop fast keystrokes). The handle keeps them
+     * for process death.
+     */
+    var nimi by mutableStateOf(handle[KEY_NIMI] ?: "")
+        private set
+    var annosmaara by mutableStateOf(handle[KEY_ANNOSMAARA] ?: "")
+        private set
 
     private val step1 = combine(
         handle.getStateFlow(KEY_STEP, 1),
-        handle.getStateFlow(KEY_NIMI, ""),
         handle.getStateFlow<Long?>(KEY_TYYPPI_ID, null),
-        handle.getStateFlow(KEY_ANNOSMAARA, ""),
         handle.getStateFlow<String?>(KEY_YKSIKKO, null)
-    ) { step, nimi, tyyppiId, annosmaara, yksikko ->
-        LisaaLaakeUiState(step, nimi, tyyppiId, annosmaara, yksikko)
+    ) { step, tyyppiId, yksikko ->
+        LisaaLaakeUiState(step = step, tyyppiId = tyyppiId, yksikko = yksikko)
     }
 
     private val step2 = combine(
@@ -115,7 +126,14 @@ class LisaaLaakeViewModel(
         Step2Values(ajat, kuinkaUsein, aloituspv, lopetuspv)
     }
 
-    private val choices = combine(repository.observeTyypit(), repository.observeYksikot(), ::Pair)
+    // A failed query becomes an error state here, before the form flows are combined, so the
+    // form itself stays live.
+    private val choices = combine(repository.observeTyypit(), repository.observeYksikot()) {
+            tyypit,
+            yksikot
+        ->
+        Choices(tyypit, yksikot)
+    }.catch { emit(Choices(emptyList(), emptyList(), loadError = true)) }
 
     val uiState: StateFlow<LisaaLaakeUiState> = combine(
         step1,
@@ -123,46 +141,57 @@ class LisaaLaakeViewModel(
         choices,
         errors,
         step2Errors
-    ) { state, values, (tyypit, yksikot), found1, found2 ->
+    ) { state, values, loaded, found1, found2 ->
         values.applyTo(state).copy(
-            tyypit = tyypit,
-            yksikot = yksikot,
+            tyypit = loaded.tyypit,
+            yksikot = loaded.yksikot,
+            loadError = loaded.loadError,
             errors = found1,
             step2Errors = found2
         )
-    }
-        .catch { emit(restoredState().copy(loadError = true)) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), restoredState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), restoredState())
 
     fun onNimiChange(value: String) {
+        nimi = value
         handle[KEY_NIMI] = value
+        validation?.cancel()
         errors.update { it.copy(nimi = null) }
     }
 
     fun onTyyppiSelect(tyyppiId: Long) {
         handle[KEY_TYYPPI_ID] = tyyppiId
+        validation?.cancel()
         errors.update { it.copy(tyyppi = false) }
     }
 
     fun onAnnosmaaraChange(value: String) {
+        annosmaara = value
         handle[KEY_ANNOSMAARA] = value
+        validation?.cancel()
         errors.update { it.copy(annosmaara = false) }
     }
 
     fun onYksikkoSelect(yksikko: String) {
         handle[KEY_YKSIKKO] = yksikko
+        validation?.cancel()
         errors.update { it.copy(yksikko = false) }
     }
 
-    /** "Seuraava vaihe": validates step 1 and moves to step 2 when everything is valid. */
+    /**
+     * "Seuraava vaihe": validates step 1 and moves to step 2 when everything is valid. The
+     * fields are read once up front; a field change while the name is being checked cancels the
+     * check, and so does a second tap.
+     */
     fun onNext() {
-        viewModelScope.launch {
-            val found = Step1Errors(
-                nimi = repository.nameError(handle[KEY_NIMI] ?: ""),
-                tyyppi = handle.get<Long>(KEY_TYYPPI_ID) == null,
-                annosmaara = handle.get<String>(KEY_ANNOSMAARA).isNullOrBlank(),
-                yksikko = handle.get<String>(KEY_YKSIKKO) == null
-            )
+        validation?.cancel()
+        val name = nimi
+        val missing = Step1Errors(
+            tyyppi = handle.get<Long>(KEY_TYYPPI_ID) == null,
+            annosmaara = annosmaara.isBlank(),
+            yksikko = handle.get<String>(KEY_YKSIKKO) == null
+        )
+        validation = viewModelScope.launch {
+            val found = missing.copy(nimi = repository.nameError(name))
             errors.value = found
             if (found.isEmpty) handle[KEY_STEP] = 2
         }
@@ -284,9 +313,7 @@ class LisaaLaakeViewModel(
     private fun restoredState(): LisaaLaakeUiState {
         val state = LisaaLaakeUiState(
             step = handle[KEY_STEP] ?: 1,
-            nimi = handle[KEY_NIMI] ?: "",
             tyyppiId = handle[KEY_TYYPPI_ID],
-            annosmaara = handle[KEY_ANNOSMAARA] ?: "",
             yksikko = handle[KEY_YKSIKKO]
         )
         val values = Step2Values(
@@ -297,6 +324,13 @@ class LisaaLaakeViewModel(
         )
         return values.applyTo(state)
     }
+
+    /** The wizard's choice lists, or [loadError] when they couldn't be read. */
+    private data class Choices(
+        val tyypit: List<Tyyppi>,
+        val yksikot: List<Yksikko>,
+        val loadError: Boolean = false
+    )
 
     /** Step 2 as stored in the [SavedStateHandle]. */
     private inner class Step2Values(
