@@ -19,6 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,16 +60,22 @@ private val FORM_WIDTH = 310.dp
 private val CROSS_SIZE = 18.dp
 private val CROSS_STROKE = 2.5.dp
 
-/** The add medication wizard. [onClose] leaves it ("Takaisin" on step 1). */
+/**
+ * The add medication wizard. [onClose] leaves it ("Takaisin" on step 1); [onSaved] runs once
+ * the medication is saved.
+ */
 @Composable
 fun LisaaLaakeScreen(
     onClose: () -> Unit,
+    onSaved: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LisaaLaakeViewModel = viewModel(factory = LisaaLaakeViewModel.Factory)
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // System back on step 2 returns to step 1 with the values kept.
     BackHandler(enabled = state.step == 2) { viewModel.onBackToStep1() }
+    // Leave once saved, also when the process was restored after the save.
+    LaunchedEffect(state.saved) { if (state.saved) onSaved() }
 
     val content = Modifier
         .fillMaxSize()
@@ -215,8 +222,20 @@ private fun Step2(state: LisaaLaakeUiState, viewModel: LisaaLaakeViewModel, modi
             hint = state.kesto?.let { kestoTeksti(it) }
         )
         Spacer(Modifier.height(BUTTON_GAP))
-        // The save itself is wired to the repository in the next commit.
-        LkPrimaryButton(stringResource(R.string.valmis), onClick = { viewModel.onDone() })
+        if (state.saveError) {
+            Text(
+                text = stringResource(R.string.virhe_tallennus),
+                style = MaterialTheme.typography.bodyMedium,
+                color = LkDanger,
+                modifier = Modifier.widthIn(max = FORM_WIDTH).fillMaxWidth()
+            )
+            Spacer(Modifier.height(16.dp))
+        }
+        LkPrimaryButton(
+            stringResource(R.string.valmis),
+            onClick = viewModel::onDone,
+            enabled = !state.saving
+        )
         Spacer(Modifier.height(FIELD_GAP))
         LkBackButton(stringResource(R.string.takaisin), onClick = viewModel::onBackToStep1)
     }

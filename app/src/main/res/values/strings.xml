@@ -53,6 +53,8 @@
     <string name="virhe_aika_jo_lisatty">Aika klo %1$s on jo lisätty.</string>
     <string name="virhe_kuinka_usein_puuttuu">Valitse, kuinka usein otat lääkkeen.</string>
     <string name="virhe_lopetus_ennen_aloitusta">Lopetuspäivä ei voi olla ennen aloituspäivää.</string>
+    <string name="virhe_tallennus">Lääkkeen tallennus epäonnistui. Yritä uudelleen.</string>
+    <string name="laake_lisatty">Lääke lisätty</string>
 
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>

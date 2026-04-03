@@ -2,15 +2,21 @@ package fi.hh.laakekamu.ui
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.etusivu.EtusivuScreen
 import fi.hh.laakekamu.ui.laakelista.LaakelistaScreen
 import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeScreen
@@ -18,6 +24,7 @@ import fi.hh.laakekamu.ui.navigation.BottomNavBar
 import fi.hh.laakekamu.ui.navigation.FormRoute
 import fi.hh.laakekamu.ui.navigation.MainDestination
 import fi.hh.laakekamu.ui.oirepaivakirja.OirepaivakirjaScreen
+import kotlinx.coroutines.launch
 
 /**
  * App shell: the navigation graph plus the bottom bar, which is shown only on the main screens
@@ -27,8 +34,11 @@ import fi.hh.laakekamu.ui.oirepaivakirja.OirepaivakirjaScreen
 fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
             // Null only before the first destination is set; the start screen is a main one.
             if (currentRoute == null || MainDestination.isMain(currentRoute)) {
@@ -55,7 +65,16 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
             composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }
             composable(FormRoute.LISAA_LAAKE) {
-                LisaaLaakeScreen(onClose = { navController.popBackStack() })
+                val lisatty = stringResource(R.string.laake_lisatty)
+                LisaaLaakeScreen(
+                    onClose = { navController.popBackStack() },
+                    onSaved = {
+                        // Pop first, so the wizard isn't saved into the list tab's back stack.
+                        navController.popBackStack()
+                        navController.navigateToTab(MainDestination.LAAKELISTA)
+                        scope.launch { snackbarHostState.showSnackbar(lisatty) }
+                    }
+                )
             }
         }
     }

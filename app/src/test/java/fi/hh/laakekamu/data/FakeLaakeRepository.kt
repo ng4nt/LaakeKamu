@@ -19,7 +19,9 @@ class FakeLaakeRepository(
     val tyypit: List<Tyyppi> = listOf(Tyyppi(1, "tabletti"), Tyyppi(2, "kapseli")),
     val yksikot: List<Yksikko> = listOf(Yksikko("mg"), Yksikko("ml")),
     /** The type query fails, as when the database can't be opened. */
-    private val failChoices: Boolean = false
+    private val failChoices: Boolean = false,
+    /** [add] fails, as when the database can't be written. */
+    private val failAdd: Boolean = false
 ) : LaakeRepository {
     val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
     val added = mutableListOf<Pair<Laake, List<Int>>>()
@@ -55,6 +57,9 @@ class FakeLaakeRepository(
     )
 
     override suspend fun add(laake: Laake, times: List<Int>): Long {
+        check(!failAdd) { "database unavailable" }
+        // Like the real repository: is checked again inside the save.
+        nameErrorFor(laake.nimi, null)?.let { throw IllegalArgumentException("Invalid name: $it") }
         val id = (laakkeet.value.maxOfOrNull { it.laakeId } ?: 0) + 1
         laakkeet.value = laakkeet.value + laake.copy(laakeId = id)
         added += laake to times

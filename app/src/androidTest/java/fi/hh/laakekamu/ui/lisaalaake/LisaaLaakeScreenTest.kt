@@ -64,7 +64,7 @@ class LisaaLaakeScreenTest {
         val viewModel = LisaaLaakeViewModel(SavedStateHandle(), repository, clock)
         compose.setContent {
             LaakeKamuTheme {
-                LisaaLaakeScreen(onClose = {}, viewModel = viewModel)
+                LisaaLaakeScreen(onClose = {}, onSaved = {}, viewModel = viewModel)
             }
         }
     }

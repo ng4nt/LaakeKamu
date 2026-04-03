@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import fi.hh.laakekamu.LaakeKamuApp
 import fi.hh.laakekamu.data.LaakeRepository
+import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Tyyppi
 import fi.hh.laakekamu.data.entity.Yksikko
 import fi.hh.laakekamu.domain.Kesto
@@ -21,6 +22,7 @@ import fi.hh.laakekamu.domain.isValidDateRange
 import fi.hh.laakekamu.domain.kestoOf
 import java.time.Clock
 import java.time.LocalDate
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,7 +78,13 @@ data class LisaaLaakeUiState(
     val kesto: Kesto? = null,
     val step2Errors: Step2Errors = Step2Errors(),
     /** The choice lists couldn't be loaded (e.g. database unavailable); the form still works. */
-    val loadError: Boolean = false
+    val loadError: Boolean = false,
+    /** "Valmis!" is saving; the button is disabled meanwhile. */
+    val saving: Boolean = false,
+    /** The last save failed for another reason than the name (e.g. the database). */
+    val saveError: Boolean = false,
+    /** The medication is saved: the screen leaves (also after a restore). */
+    val saved: Boolean = false
 ) {
     /** Tarvittaessa has no times, so the time rows are disabled. */
     val ajatEnabled: Boolean get() = kuinkaUsein != KuinkaUsein.TARVITTAESSA
@@ -87,8 +95,9 @@ data class LisaaLaakeUiState(
  * [SavedStateHandle], so the form survives process death: times as an `IntArray` (-1 = no
  * time yet), dates as epoch days. Step 1 is validated before moving on: name (via the
  * repository), type, dose and unit are required. Step 2 rejects a duplicate time when it's
- * picked, checks the date range as the dates change and validates everything on "Valmis!".
- * [clock] gives "today" (the default start date and the duration hint).
+ * picked, checks the date range as the dates change and validates everything on "Valmis!",
+ * which then saves the medication. [clock] gives "today" (the default start date and the
+ * duration hint).
  */
 class LisaaLaakeViewModel(
     private val handle: SavedStateHandle,
@@ -97,7 +106,9 @@ class LisaaLaakeViewModel(
 ) : ViewModel() {
     private val errors = MutableStateFlow(Step1Errors())
     private val step2Errors = MutableStateFlow(Step2Errors())
+    private val saveState = MutableStateFlow(SaveState())
     private var validation: Job? = null
+    private var saveJob: Job? = null
 
     /**
      * The typed texts are Compose state, so a text field gets its new value in the same frame
@@ -112,9 +123,10 @@ class LisaaLaakeViewModel(
     private val step1 = combine(
         handle.getStateFlow(KEY_STEP, 1),
         handle.getStateFlow<Long?>(KEY_TYYPPI_ID, null),
-        handle.getStateFlow<String?>(KEY_YKSIKKO, null)
-    ) { step, tyyppiId, yksikko ->
-        LisaaLaakeUiState(step = step, tyyppiId = tyyppiId, yksikko = yksikko)
+        handle.getStateFlow<String?>(KEY_YKSIKKO, null),
+        handle.getStateFlow(KEY_SAVED, false)
+    ) { step, tyyppiId, yksikko, saved ->
+        LisaaLaakeUiState(step = step, tyyppiId = tyyppiId, yksikko = yksikko, saved = saved)
     }
 
     private val step2 = combine(
@@ -128,26 +140,27 @@ class LisaaLaakeViewModel(
 
     // A failed query becomes an error state here, before the form flows are combined, so the
     // form itself stays live.
-    private val choices = combine(repository.observeTyypit(), repository.observeYksikot()) {
-            tyypit,
-            yksikot
-        ->
-        Choices(tyypit, yksikot)
-    }.catch { emit(Choices(emptyList(), emptyList(), loadError = true)) }
+    private val choices =
+        combine(repository.observeTyypit(), repository.observeYksikot()) { tyypit, yksikot ->
+            Choices(tyypit, yksikot)
+        }.catch { emit(Choices(emptyList(), emptyList(), loadError = true)) }
+
+    private val feedback = combine(errors, step2Errors, saveState, ::Triple)
 
     val uiState: StateFlow<LisaaLaakeUiState> = combine(
         step1,
         step2,
         choices,
-        errors,
-        step2Errors
-    ) { state, values, loaded, found1, found2 ->
+        feedback
+    ) { state, values, loaded, (found1, found2, save) ->
         values.applyTo(state).copy(
             tyypit = loaded.tyypit,
             yksikot = loaded.yksikot,
             loadError = loaded.loadError,
             errors = found1,
-            step2Errors = found2
+            step2Errors = found2,
+            saving = save.saving,
+            saveError = save.failed
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), restoredState())
 
@@ -258,10 +271,51 @@ class LisaaLaakeViewModel(
     }
 
     /**
-     * "Valmis!": validates step 2. Returns true when the medication can be saved (the save
-     * itself comes with the repository call).
+     * "Valmis!": validates step 2, then saves the medication in one transaction: a daily
+     * one with its times, an as-needed one without. A second tap while saving, or after,
+     * does nothing. If the name was taken meanwhile (e.g. in another window), step 1 shows the duplicate-name
+     * error again; any other failure keeps the form and shows an error.
      */
-    fun onDone(): Boolean {
+    fun onDone() {
+        if (saveJob?.isActive == true || handle.get<Boolean>(KEY_SAVED) == true) return
+        if (!validateStep2()) return
+        val laake = Laake(
+            nimi = nimi.trim(),
+            tyyppiId = handle.get<Long>(KEY_TYYPPI_ID) ?: return,
+            annosmaara = annosmaara.trim(),
+            yksikko = handle.get<String>(KEY_YKSIKKO) ?: return,
+            kuinkaUsein = kuinkaUsein() ?: return,
+            aloituspv = aloituspv(),
+            lopetuspv = lopetuspv()
+        )
+        val times = if (laake.kuinkaUsein == KuinkaUsein.PAIVITTAIN) {
+            ajat().filter { it != NO_TIME }
+        } else {
+            emptyList()
+        }
+        saveJob = viewModelScope.launch {
+            saveState.value = SaveState(saving = true)
+            try {
+                repository.add(laake, times)
+                handle[KEY_SAVED] = true
+                saveState.value = SaveState()
+            } catch (e: IllegalArgumentException) {
+                val nameError = repository.nameError(laake.nimi)
+                if (nameError != null) {
+                    errors.value = Step1Errors(nimi = nameError)
+                    handle[KEY_STEP] = 1
+                }
+                saveState.value = SaveState(failed = nameError == null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                saveState.value = SaveState(failed = true)
+            }
+        }
+    }
+
+    /** Checks the whole of step 2 and shows its errors. True when it's valid. */
+    private fun validateStep2(): Boolean {
         val daily = kuinkaUsein() == KuinkaUsein.PAIVITTAIN
         val ajat = ajat()
         val ajatErrors = if (!daily) {
@@ -325,6 +379,9 @@ class LisaaLaakeViewModel(
         return values.applyTo(state)
     }
 
+    /** Saving with "Valmis!": in progress, or the last attempt [failed]. */
+    private data class SaveState(val saving: Boolean = false, val failed: Boolean = false)
+
     /** The wizard's choice lists, or [loadError] when they couldn't be read. */
     private data class Choices(
         val tyypit: List<Tyyppi>,
@@ -362,6 +419,7 @@ class LisaaLaakeViewModel(
         private const val KEY_KUINKA_USEIN = "kuinkaUsein"
         private const val KEY_ALOITUSPV = "aloituspv"
         private const val KEY_LOPETUSPV = "lopetuspv"
+        private const val KEY_SAVED = "saved"
 
         /** An empty time row in the saved `IntArray`. */
         private const val NO_TIME = -1

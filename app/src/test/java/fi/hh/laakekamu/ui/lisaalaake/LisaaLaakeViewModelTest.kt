@@ -247,7 +247,8 @@ class LisaaLaakeViewModelTest {
         val state = vm.uiState.value
         assertEquals(listOf<Int?>(null), state.ajat)
         assertFalse(state.ajatEnabled)
-        assertTrue(vm.onDone())
+        vm.onDone()
+        assertTrue(vm.uiState.value.step2Errors.isEmpty)
     }
 
     @Test
@@ -283,12 +284,12 @@ class LisaaLaakeViewModelTest {
     fun done_withoutFrequencyOrTimes_showsTheErrors() = runTest {
         val vm = viewModel().also { collect(it) }
 
-        assertFalse(vm.onDone())
+        vm.onDone()
         assertTrue(vm.uiState.value.step2Errors.kuinkaUsein)
 
         vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
         assertFalse(vm.uiState.value.step2Errors.kuinkaUsein)
-        assertFalse(vm.onDone())
+        vm.onDone()
         assertEquals(mapOf(0 to AikaError.Puuttuu), vm.uiState.value.step2Errors.ajat)
     }
 
@@ -301,7 +302,7 @@ class LisaaLaakeViewModelTest {
         vm.onAikaChange(1, 1200)
         vm.onLopetuspvChange(today.plusDays(9))
 
-        assertTrue(vm.onDone())
+        vm.onDone()
         assertTrue(vm.uiState.value.step2Errors.isEmpty)
     }
 
@@ -324,6 +325,96 @@ class LisaaLaakeViewModelTest {
         assertEquals(KuinkaUsein.PAIVITTAIN, state.kuinkaUsein)
         assertEquals(today.plusDays(1), state.aloituspv)
         assertEquals(today.plusDays(30), state.lopetuspv)
+    }
+
+    // Saving with "Valmis!"
+
+    @Test
+    fun done_savesADailyMedication_withItsTimes_once() = runTest {
+        val vm = viewModel().also { collect(it) }
+        fillValid(vm, nimi = "  A aamulääke ")
+        vm.onNext()
+        fillStep2(vm)
+
+        vm.onDone()
+        vm.onDone()
+
+        val expected = Laake(
+            nimi = "A aamulääke",
+            tyyppiId = 1,
+            annosmaara = "5",
+            yksikko = "mg",
+            kuinkaUsein = KuinkaUsein.PAIVITTAIN,
+            aloituspv = today,
+            lopetuspv = today.plusDays(9)
+        )
+        assertEquals(listOf(expected to listOf(480, 1200)), repository.added)
+        assertTrue(vm.uiState.value.saved)
+    }
+
+    @Test
+    fun done_savesAnAsNeededMedication_withoutTimes() = runTest {
+        val vm = viewModel().also { collect(it) }
+        fillValid(vm)
+        vm.onNext()
+        vm.onKuinkaUseinSelect(KuinkaUsein.TARVITTAESSA)
+
+        vm.onDone()
+
+        assertEquals(emptyList<Int>(), repository.added.single().second)
+        assertEquals(KuinkaUsein.TARVITTAESSA, repository.added.single().first.kuinkaUsein)
+    }
+
+    @Test
+    fun done_withAnInvalidStep2_savesNothing() = runTest {
+        val vm = viewModel().also { collect(it) }
+        fillValid(vm)
+        vm.onNext()
+
+        vm.onDone()
+
+        assertTrue(repository.added.isEmpty())
+        assertFalse(vm.uiState.value.saved)
+    }
+
+    @Test
+    fun nameTakenMeanwhile_returnsToStep1_withTheL5Message() = runTest {
+        val vm = viewModel().also { collect(it) }
+        fillValid(vm, nimi = "Burana")
+        vm.onNext()
+        fillStep2(vm)
+        repository.laakkeet.value = listOf(laake("burana"))
+
+        vm.onDone()
+
+        assertTrue(repository.added.isEmpty())
+        assertEquals(1, vm.uiState.value.step)
+        assertEquals(NameError.Duplicate("Burana"), vm.uiState.value.errors.nimi)
+        assertFalse(vm.uiState.value.saveError)
+    }
+
+    @Test
+    fun aFailedSave_keepsTheForm_andShowsTheError() = runTest {
+        val vm = viewModel(repo = FakeLaakeRepository(failAdd = true)).also { collect(it) }
+        fillValid(vm)
+        vm.onNext()
+        fillStep2(vm)
+
+        vm.onDone()
+
+        val state = vm.uiState.value
+        assertTrue(state.saveError)
+        assertFalse(state.saved || state.saving)
+        assertEquals(2, state.step)
+        assertEquals(listOf<Int?>(480, 1200), state.ajat)
+    }
+
+    private fun fillStep2(vm: LisaaLaakeViewModel) {
+        vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
+        vm.onAikaChange(0, 480)
+        vm.onLisaaAika()
+        vm.onAikaChange(1, 1200)
+        vm.onLopetuspvChange(today.plusDays(9))
     }
 
     private fun fillValid(vm: LisaaLaakeViewModel, nimi: String = "A aamulääke") {
