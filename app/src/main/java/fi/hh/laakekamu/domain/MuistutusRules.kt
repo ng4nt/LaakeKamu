@@ -112,6 +112,10 @@ fun moveStart(
  * reminder at that time is still valid today, its dose already taken), which starts tomorrow.
  * An id that isn't a current reminder (e.g. a stale one restored from saved state) only brings
  * its time.
+ *
+ * A reminder taken today whose row moved to a time another reminder keeps ends today, and its
+ * taken dose counts for today: as in [changeTime], one of the remaining new times then starts
+ * tomorrow, so shifting every time doesn't add a dose today.
  */
 fun planEdit(
     current: List<Muistutusjakso>,
@@ -128,23 +132,31 @@ fun planEdit(
         if (match != null) kept += match.id else missing += aika
     }
     val rowTimes = edited.filter { it.id != null }.associate { it.id to it.aika }
+    var movedAfterTaking = 0
     val changes = current.filter { it.id !in kept }.flatMap { jakso ->
         val newAika = rowTimes[jakso.id]
         val taken = jakso.id in takenToday
         if (newAika != null && missing.remove(newAika)) {
             changeTime(jakso, newAika, today, taken, aloituspv)
         } else {
+            if (newAika != null && taken) movedAfterTaking++
             listOf(endReminder(jakso, today, taken))
         }
     }
-    val additions = missing.map { Muutos.Lisaa(it, newReminderStart(today, aloituspv)) }
-    return (changes + additions).map { muutos ->
+    val tomorrow = today.plusDays(1)
+    val additions = missing.map { aika ->
+        val start = newReminderStart(today, aloituspv)
+        val late = start == today && (aika in endsToday || movedAfterTaking-- > 0)
+        Muutos.Lisaa(aika, if (late) tomorrow else start)
+    }
+    val changesAfterEnds = changes.map { muutos ->
         if (muutos is Muutos.Lisaa && muutos.aika in endsToday && muutos.voimassaAlkaen == today) {
-            muutos.copy(voimassaAlkaen = today.plusDays(1))
+            muutos.copy(voimassaAlkaen = tomorrow)
         } else {
             muutos
         }
     }
+    return changesAfterEnds + additions
 }
 
 /**

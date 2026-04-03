@@ -288,6 +288,33 @@ class MuistutusRulesTest {
     }
 
     @Test
+    fun planEdit_shiftingEveryTimeAfterTakingOne_keepsTodaysDoseCount() {
+        // 8.00 taken, 9.00; both shifted an hour: 8.00 to 9.00 and 9.00 to 10.00.
+        // Today: 8.00 taken + 9.00. From tomorrow: 9.00 + 10.00.
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(1, today), Muutos.Lisaa(600, tomorrow)),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 540), EditedTime(2, 600)),
+                today,
+                today.minusDays(10),
+                takenToday = setOf(1L)
+            )
+        )
+    }
+
+    @Test
+    fun planEdit_removingATakenTimeAndAddingAnother_startsTheNewTimeToday() {
+        // A removed row isn't a move: the new time is a dose of its own today.
+        val current = listOf(jakso(1, 480, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(1, today), Muutos.Lisaa(600, today)),
+            planEdit(current, listOf(EditedTime(null, 600)), today, today.minusDays(10), setOf(1L))
+        )
+    }
+
+    @Test
     fun planEdit_swappedTimes_changeNothing() {
         val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
         assertEquals(
