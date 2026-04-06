@@ -290,13 +290,60 @@ class MuistutusRulesTest {
     @Test
     fun planEdit_shiftingEveryTimeAfterTakingOne_keepsTodaysDoseCount() {
         // 8.00 taken, 9.00; both shifted an hour: 8.00 to 9.00 and 9.00 to 10.00.
-        // Today: 8.00 taken + 9.00. From tomorrow: 9.00 + 10.00.
+        // The taken dose is today's 9.00 dose. Today: 8.00 taken + 10.00; from tomorrow 9.00 +
+        // 10.00.
         val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
         assertEquals(
-            listOf(Muutos.Paata(1, today), Muutos.Lisaa(600, tomorrow)),
+            listOf(
+                Muutos.Paata(1, today),
+                Muutos.Lisaa(540, tomorrow),
+                Muutos.Paata(2, yesterday),
+                Muutos.Lisaa(600, today)
+            ),
             planEdit(
                 current,
                 listOf(EditedTime(1, 540), EditedTime(2, 600)),
+                today,
+                today.minusDays(10),
+                takenToday = setOf(1L)
+            )
+        )
+    }
+
+    @Test
+    fun planEdit_takenTimeMovedOntoAKeptTime_isTodaysOnlyDose() {
+        // 8.00 taken, then 8.00 edited to 9.00 and the 9.00 row removed (review a).
+        // Today: 8.00 taken only; 9.00 from tomorrow.
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            listOf(
+                Muutos.Paata(1, today),
+                Muutos.Lisaa(540, tomorrow),
+                Muutos.Paata(2, yesterday)
+            ),
+            planEdit(current, listOf(EditedTime(1, 540)), today, today.minusDays(10), setOf(1L))
+        )
+    }
+
+    @Test
+    fun planEdit_takenTimeMovedOntoAKeptTime_withAnotherTimeChanged() {
+        // As above, plus 11.40 changed to 13.20 (review b). Today: 8.00 taken + 13.20.
+        val current = listOf(
+            jakso(1, 480, today.minusDays(10)),
+            jakso(2, 540, today.minusDays(10)),
+            jakso(3, 700, today.minusDays(10))
+        )
+        assertEquals(
+            listOf(
+                Muutos.Paata(1, today),
+                Muutos.Lisaa(540, tomorrow),
+                Muutos.Paata(2, yesterday),
+                Muutos.Paata(3, yesterday),
+                Muutos.Lisaa(800, today)
+            ),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 540), EditedTime(3, 800)),
                 today,
                 today.minusDays(10),
                 takenToday = setOf(1L)
