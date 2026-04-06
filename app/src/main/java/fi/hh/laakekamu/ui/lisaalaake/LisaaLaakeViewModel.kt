@@ -132,7 +132,9 @@ class LisaaLaakeViewModel(
     private val step2 = combine(
         handle.getStateFlow(KEY_AJAT, intArrayOf(NO_TIME)),
         handle.getStateFlow<String?>(KEY_KUINKA_USEIN, null),
-        handle.getStateFlow(KEY_ALOITUSPV, today().toEpochDay()),
+        // Null until the user picks a date, so a restore on a later day defaults to that day
+        //.
+        handle.getStateFlow<Long?>(KEY_ALOITUSPV, null),
         handle.getStateFlow<Long?>(KEY_LOPETUSPV, null)
     ) { ajat, kuinkaUsein, aloituspv, lopetuspv ->
         Step2Values(ajat, kuinkaUsein, aloituspv, lopetuspv)
@@ -373,7 +375,7 @@ class LisaaLaakeViewModel(
         val values = Step2Values(
             ajat(),
             handle[KEY_KUINKA_USEIN],
-            aloituspv().toEpochDay(),
+            handle[KEY_ALOITUSPV],
             handle[KEY_LOPETUSPV]
         )
         return values.applyTo(state)
@@ -393,11 +395,11 @@ class LisaaLaakeViewModel(
     private inner class Step2Values(
         val ajat: IntArray,
         val kuinkaUsein: String?,
-        val aloituspv: Long,
+        val aloituspv: Long?,
         val lopetuspv: Long?
     ) {
         fun applyTo(state: LisaaLaakeUiState): LisaaLaakeUiState {
-            val alku = LocalDate.ofEpochDay(aloituspv)
+            val alku = aloituspv?.let(LocalDate::ofEpochDay) ?: today()
             val loppu = lopetuspv?.let(LocalDate::ofEpochDay)
             return state.copy(
                 ajat = ajat.map { if (it == NO_TIME) null else it },

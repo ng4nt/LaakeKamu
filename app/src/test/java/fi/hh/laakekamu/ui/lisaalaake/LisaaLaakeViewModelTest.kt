@@ -327,6 +327,23 @@ class LisaaLaakeViewModelTest {
         assertEquals(today.plusDays(30), state.lopetuspv)
     }
 
+    @Test
+    fun anUnpickedStartDate_followsTheDay_afterARestore() = runTest {
+        // Opened today, restored tomorrow without picking a start date.
+        val handle = SavedStateHandle()
+        viewModel(handle).also { collect(it) }
+        val tomorrowClock =
+            Clock.fixed(today.plusDays(1).atTime(8, 0).atZone(zone).toInstant(), zone)
+
+        val restored = LisaaLaakeViewModel(
+            SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }),
+            repository,
+            tomorrowClock
+        ).also { collect(it) }
+
+        assertEquals(today.plusDays(1), restored.uiState.value.aloituspv)
+    }
+
     // Saving with "Valmis!"
 
     @Test
