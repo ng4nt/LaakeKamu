@@ -22,6 +22,12 @@ interface LaakeRepository {
     /** Medications that aren't deleted, in Finnish alphabetical order. */
     fun observeActive(): Flow<List<Laake>>
 
+    /**
+     * The current reminder times (voimassa_asti IS NULL) of every medication, by medication id,
+     * earliest first. Lääkelista groups the daily medications by these.
+     */
+    fun observeCurrentTimes(): Flow<Map<Long, List<Int>>>
+
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
     suspend fun currentTimes(laakeId: Long): List<Muistutus>
 

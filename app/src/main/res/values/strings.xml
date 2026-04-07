@@ -56,6 +56,14 @@
     <string name="virhe_tallennus">Lääkkeen tallennus epäonnistui. Yritä uudelleen.</string>
     <string name="laake_lisatty">Lääke lisätty</string>
 
+    <!-- Lääkelista -->
+    <string name="muokkaa">Muokkaa</string>
+    <string name="ota_paivittain">OTA PÄIVITTÄIN</string>
+    <string name="tarvittaessa_otsikko">TARVITTAESSA</string>
+    <string name="annos">%1$s %2$s</string>
+    <string name="laakelista_tyhja">Lääkelista on tyhjä. Lisää ensimmäinen lääke Lisää-painikkeesta.</string>
+    <string name="virhe_lista">Lääkelistaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>
     <string name="kesto_jaljella">vielä %1$d pv</string>

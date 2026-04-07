@@ -59,7 +59,9 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                     onAdd = {
                         // A double tap mustn't push two wizards.
                         navController.navigate(FormRoute.LISAA_LAAKE) { launchSingleTop = true }
-                    }
+                    },
+                    // The edit selector is not built yet.
+                    onEdit = {}
                 )
             }
             composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }

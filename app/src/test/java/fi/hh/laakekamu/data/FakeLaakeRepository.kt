@@ -18,12 +18,13 @@ import kotlinx.coroutines.flow.map
 class FakeLaakeRepository(
     val tyypit: List<Tyyppi> = listOf(Tyyppi(1, "tabletti"), Tyyppi(2, "kapseli")),
     val yksikot: List<Yksikko> = listOf(Yksikko("mg"), Yksikko("ml")),
-    /** The type query fails, as when the database can't be opened. */
+    /** The type and medication queries fail, as when the database can't be opened. */
     private val failChoices: Boolean = false,
     /** [add] fails, as when the database can't be written. */
     private val failAdd: Boolean = false
 ) : LaakeRepository {
     val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
+    val currentTimes = MutableStateFlow<Map<Long, List<Int>>>(emptyMap())
     val added = mutableListOf<Pair<Laake, List<Int>>>()
 
     /** When set, [nameError] waits for it, so a test can act while the name is checked. */
@@ -37,9 +38,13 @@ class FakeLaakeRepository(
 
     override fun observeYksikot(): Flow<List<Yksikko>> = flowOf(yksikot)
 
-    override fun observeActive(): Flow<List<Laake>> = laakkeet.map { list ->
-        list.filter { it.aktiivinen }
+    override fun observeActive(): Flow<List<Laake>> = if (failChoices) {
+        flow { throw IllegalStateException("database unavailable") }
+    } else {
+        laakkeet.map { list -> list.filter { it.aktiivinen } }
     }
+
+    override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = currentTimes
 
     override suspend fun currentTimes(laakeId: Long): List<Muistutus> = emptyList()
 
@@ -62,6 +67,7 @@ class FakeLaakeRepository(
         nameErrorFor(laake.nimi, null)?.let { throw IllegalArgumentException("Invalid name: $it") }
         val id = (laakkeet.value.maxOfOrNull { it.laakeId } ?: 0) + 1
         laakkeet.value = laakkeet.value + laake.copy(laakeId = id)
+        if (times.isNotEmpty()) currentTimes.value = currentTimes.value + (id to times.sorted())
         added += laake to times
         return id
     }

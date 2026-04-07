@@ -62,6 +62,15 @@ class RoomLaakeRepository(
         laakkeet.sortedWith(compareBy(finnish) { it.nimi })
     }
 
+    /** Current reminder times by medication, earliest first (filtered here: a few rows). */
+    override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = flow {
+        emitAll(database().muistutusDao().observeAll())
+    }.map { reminders ->
+        reminders.filter { it.voimassaAsti == null }
+            .groupBy({ it.laakeId }, { it.aika })
+            .mapValues { (_, times) -> times.sorted() }
+    }
+
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
     override suspend fun currentTimes(laakeId: Long): List<Muistutus> =
         database().muistutusDao().getCurrentByLaake(laakeId)
