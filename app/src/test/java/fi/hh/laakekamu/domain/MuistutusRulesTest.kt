@@ -352,6 +352,49 @@ class MuistutusRulesTest {
     }
 
     @Test
+    fun planEdit_shiftingAfterTakingBoth_addsNoDoseToday() {
+        // 8.00 and 9.00 both taken; shifted an hour: 8.00 to 9.00, 9.00 to 10.00.
+        // Today: 8.00 + 9.00 taken, nothing due. From tomorrow: 9.00 + 10.00.
+        val current = listOf(jakso(1, 480, today.minusDays(10)), jakso(2, 540, today.minusDays(10)))
+        assertEquals(
+            listOf(Muutos.Paata(1, today), Muutos.Lisaa(600, tomorrow)),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 540), EditedTime(2, 600)),
+                today,
+                today.minusDays(10),
+                takenToday = setOf(1L, 2L)
+            )
+        )
+    }
+
+    @Test
+    fun planEdit_shiftingThreeTimesAfterTakingTwo_leavesOneDueToday() {
+        // 8.00 and 9.00 taken, 10.00 not; all shifted an hour.
+        // Today: 8.00 + 9.00 taken, 11.00 due. From tomorrow: 9.00, 10.00, 11.00.
+        val current = listOf(
+            jakso(1, 480, today.minusDays(10)),
+            jakso(2, 540, today.minusDays(10)),
+            jakso(3, 600, today.minusDays(10))
+        )
+        assertEquals(
+            listOf(
+                Muutos.Paata(1, today),
+                Muutos.Paata(3, yesterday),
+                Muutos.Lisaa(660, today),
+                Muutos.Lisaa(600, tomorrow)
+            ),
+            planEdit(
+                current,
+                listOf(EditedTime(1, 540), EditedTime(2, 600), EditedTime(3, 660)),
+                today,
+                today.minusDays(10),
+                takenToday = setOf(1L, 2L)
+            )
+        )
+    }
+
+    @Test
     fun planEdit_removingATakenTimeAndAddingAnother_startsTheNewTimeToday() {
         // A removed row isn't a move: the new time is a dose of its own today.
         val current = listOf(jakso(1, 480, today.minusDays(10)))

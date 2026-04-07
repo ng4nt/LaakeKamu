@@ -275,7 +275,7 @@ class RepositoryTest {
 
         val validToday = reminders(id).filter {
             !it.voimassaAlkaen.isAfter(today) &&
-                (it.voimassaAsti == null || !it.voimassaAsti!!.isBefore(today))
+                (it.voimassaAsti == null || !it.voimassaAsti.isBefore(today))
         }
         assertEquals(listOf(first), validToday.map { it.muistutusId })
         val eight = reminders(id).single { it.voimassaAsti == null && it.aika == 480 }
