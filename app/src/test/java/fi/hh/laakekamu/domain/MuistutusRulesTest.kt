@@ -395,6 +395,24 @@ class MuistutusRulesTest {
     }
 
     @Test
+    fun planEdit_timeChangedInPlaceOntoATimeTakenEarlierToday_startsTomorrow() {
+        // Added today with 8.00 and 12.00; 8.00 taken, then changed to 10.00 (it ends today).
+        // Now 12.00 is changed to 8.00: today already had its 8.00 dose.
+        val current = listOf(jakso(2, 600, tomorrow), jakso(3, 720, today))
+        assertEquals(
+            listOf(Muutos.VaihdaAika(3, 480), Muutos.SiirraAlku(3, tomorrow)),
+            planEdit(
+                current,
+                listOf(EditedTime(2, 600), EditedTime(3, 480)),
+                today,
+                today,
+                takenToday = emptySet(),
+                endsToday = setOf(480)
+            )
+        )
+    }
+
+    @Test
     fun planEdit_removingATakenTimeAndAddingAnother_startsTheNewTimeToday() {
         // A removed row isn't a move: the new time is a dose of its own today.
         val current = listOf(jakso(1, 480, today.minusDays(10)))

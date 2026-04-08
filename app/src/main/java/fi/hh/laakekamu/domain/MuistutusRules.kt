@@ -151,14 +151,21 @@ fun planEdit(
         }
     }
     val additions = missing.map { Muutos.Lisaa(it, newReminderStart(today, aloituspv)) }
-    return (changes + additions).map { muutos ->
-        val doneAlready = muutos is Muutos.Lisaa &&
-            muutos.voimassaAlkaen == today &&
-            (muutos.aika in doneToday || muutos.aika in endsToday)
-        if (doneAlready) {
-            muutos.copy(voimassaAlkaen = today.plusDays(1))
-        } else {
-            muutos
+    // A time whose dose is already taken today (or whose reminder ends today after its dose was
+    // taken) isn't due again today: a new reminder there starts tomorrow, and so does one changed
+    // in place onto it (it has no history).
+    val alreadyDone = doneToday + endsToday
+    val startsToday = current.filter { it.voimassaAlkaen == today }.map { it.id }.toSet()
+    val tomorrow = today.plusDays(1)
+    return (changes + additions).flatMap { muutos ->
+        when {
+            muutos is Muutos.Lisaa &&
+                muutos.voimassaAlkaen == today &&
+                muutos.aika in alreadyDone -> listOf(muutos.copy(voimassaAlkaen = tomorrow))
+            muutos is Muutos.VaihdaAika &&
+                muutos.id in startsToday &&
+                muutos.aika in alreadyDone -> listOf(muutos, Muutos.SiirraAlku(muutos.id, tomorrow))
+            else -> listOf(muutos)
         }
     }
 }
