@@ -5,11 +5,13 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -24,7 +26,6 @@ import fi.hh.laakekamu.ui.navigation.BottomNavBar
 import fi.hh.laakekamu.ui.navigation.FormRoute
 import fi.hh.laakekamu.ui.navigation.MainDestination
 import fi.hh.laakekamu.ui.oirepaivakirja.OirepaivakirjaScreen
-import kotlinx.coroutines.launch
 
 /**
  * App shell: the navigation graph plus the bottom bar, which is shown only on the main screens
@@ -35,7 +36,6 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -54,7 +54,19 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
             startDestination = MainDestination.ETUSIVU.route,
             modifier = Modifier.padding(innerPadding)
         ) {
-            composable(MainDestination.LAAKELISTA.route) {
+            composable(MainDestination.LAAKELISTA.route) { entry ->
+                // "Lääke lisätty" comes through the entry's saved state, so it survives
+                // rotation; it's cleared once shown.
+                val handle = entry.savedStateHandle
+                val lisatty by handle.getStateFlow(KEY_LAAKE_LISATTY, false)
+                    .collectAsStateWithLifecycle()
+                val viesti = stringResource(R.string.laake_lisatty)
+                LaunchedEffect(lisatty) {
+                    if (lisatty) {
+                        snackbarHostState.showSnackbar(viesti)
+                        handle[KEY_LAAKE_LISATTY] = false
+                    }
+                }
                 LaakelistaScreen(
                     onAdd = {
                         // A double tap mustn't push two wizards.
@@ -67,20 +79,24 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
             composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }
             composable(FormRoute.LISAA_LAAKE) {
-                val lisatty = stringResource(R.string.laake_lisatty)
                 LisaaLaakeScreen(
-                    onClose = { navController.popBackStack() },
+                    // A double tap mustn't pop the list too.
+                    onClose = dropUnlessResumed { navController.popBackStack() },
                     onSaved = {
                         // Pop first, so the wizard isn't saved into the list tab's back stack.
                         navController.popBackStack()
                         navController.navigateToTab(MainDestination.LAAKELISTA)
-                        scope.launch { snackbarHostState.showSnackbar(lisatty) }
+                        navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                            .savedStateHandle[KEY_LAAKE_LISATTY] = true
                     }
                 )
             }
         }
     }
 }
+
+/** Lääkelista's saved-state flag: show "Lääke lisätty". */
+private const val KEY_LAAKE_LISATTY = "laakeLisatty"
 
 /**
  * Standard bottom-bar navigation: one copy of each tab on the back stack, back from a tab
