@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -145,11 +146,12 @@ private fun Rivi(rivi: ListaRivi) {
             .padding(start = BULLET_INDENT)
             .semantics(mergeDescendants = true) {}
     ) {
+        // Decorative: TalkBack reads the line without the bullet.
         Text(
             text = "•",
             style = MaterialTheme.typography.bodyLarge,
             color = nameColor,
-            modifier = Modifier.width(BULLET_WIDTH)
+            modifier = Modifier.width(BULLET_WIDTH).clearAndSetSemantics {}
         )
         Column {
             Text(

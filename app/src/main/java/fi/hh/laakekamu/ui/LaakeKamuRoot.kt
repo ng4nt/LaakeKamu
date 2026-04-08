@@ -1,5 +1,6 @@
 package fi.hh.laakekamu.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -56,15 +57,22 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
         ) {
             composable(MainDestination.LAAKELISTA.route) { entry ->
                 // "Lääke lisätty" comes through the entry's saved state, so it survives
-                // rotation; it's cleared once shown.
+                // rotation. It's cleared once shown or when the user leaves the
+                // list, but not when the activity is only being recreated.
                 val handle = entry.savedStateHandle
                 val lisatty by handle.getStateFlow(KEY_LAAKE_LISATTY, false)
                     .collectAsStateWithLifecycle()
                 val viesti = stringResource(R.string.laake_lisatty)
+                val activity = LocalActivity.current
                 LaunchedEffect(lisatty) {
                     if (lisatty) {
-                        snackbarHostState.showSnackbar(viesti)
-                        handle[KEY_LAAKE_LISATTY] = false
+                        try {
+                            snackbarHostState.showSnackbar(viesti)
+                        } finally {
+                            if (activity?.isChangingConfigurations != true) {
+                                handle[KEY_LAAKE_LISATTY] = false
+                            }
+                        }
                     }
                 }
                 LaakelistaScreen(
