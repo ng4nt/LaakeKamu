@@ -2,12 +2,14 @@ package fi.hh.laakekamu.ui.laakelista
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +31,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,6 +47,9 @@ import fi.hh.laakekamu.ui.theme.LkPrimary
 // bullets indented 30dp, an empty 20sp line between time groups and three before TARVITTAESSA,
 // buttons at x 34 and 243 (150 x 68), 56dp above the bottom bar.
 private val TITLE_TOP = 48.dp
+
+// The title row's padding plus its 32sp line.
+private val TITLE_BLOCK = 92.dp
 private val LIST_TOP = 50.dp
 private val LIST_START = 59.dp
 private val BULLET_INDENT = 14.dp
@@ -67,22 +73,32 @@ fun LaakelistaScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier.fillMaxSize()) {
-        LkScreenTitle(
-            text = stringResource(R.string.nav_laakelista),
-            icon = R.drawable.ic_medicine,
-            modifier = Modifier.padding(top = TITLE_TOP)
-        )
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            when {
-                state.loadError -> CenteredText(stringResource(R.string.virhe_lista))
-                state.isEmpty -> CenteredText(stringResource(R.string.laakelista_tyhja))
-                else -> Lista(
-                    state,
-                    Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(start = LIST_START, end = 16.dp, top = LIST_TOP, bottom = 16.dp)
+        // The title scrolls with the list, so the list keeps its room in landscape and at large
+        // font sizes; the buttons stay put.
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+            val viewport = maxHeight
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                LkScreenTitle(
+                    text = stringResource(R.string.nav_laakelista),
+                    icon = R.drawable.ic_medicine,
+                    modifier = Modifier.padding(top = TITLE_TOP)
                 )
+                when {
+                    state.loadError -> CenteredText(stringResource(R.string.virhe_lista), viewport)
+                    state.isEmpty -> CenteredText(
+                        stringResource(R.string.laakelista_tyhja),
+                        viewport
+                    )
+                    else -> Lista(
+                        state,
+                        Modifier.padding(
+                            start = LIST_START,
+                            end = 16.dp,
+                            top = LIST_TOP,
+                            bottom = 16.dp
+                        )
+                    )
+                }
             }
         }
         Row(
@@ -173,9 +189,16 @@ private fun Rivi(rivi: ListaRivi) {
     }
 }
 
+/** A message in the middle of the space left under the title ([viewport] minus the title). */
 @Composable
-private fun CenteredText(text: String) {
-    Box(Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+private fun CenteredText(text: String, viewport: Dp) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = viewport - TITLE_BLOCK)
+            .padding(horizontal = 32.dp),
+        contentAlignment = Alignment.Center
+    ) {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyLarge,
