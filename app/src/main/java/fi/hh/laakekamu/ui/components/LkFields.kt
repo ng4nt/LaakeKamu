@@ -327,17 +327,28 @@ fun LkDateField(
                     }
                 }
             ) {
-                // Again inside the dialog window, which resets the locale.
+                // Again inside the dialog window, which resets the locale. The
+                // headline uses headlineLarge, which is 32 Bold here: too wide for "Valittu
+                // päivämäärä", so the picker gets the 25sp style.
+                val typography = MaterialTheme.typography
                 ProvideFinnishLocale {
-                    DatePicker(
-                        state = state,
-                        title = {
-                            Text(
-                                text = stringResource(R.string.valitse_paiva),
-                                modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
-                            )
-                        }
-                    )
+                    MaterialTheme(
+                        typography = typography.copy(headlineLarge = typography.headlineSmall)
+                    ) {
+                        DatePicker(
+                            state = state,
+                            title = {
+                                Text(
+                                    text = stringResource(R.string.valitse_paiva),
+                                    modifier = Modifier.padding(
+                                        start = 24.dp,
+                                        end = 12.dp,
+                                        top = 16.dp
+                                    )
+                                )
+                            }
+                        )
+                    }
                 }
             }
         }
