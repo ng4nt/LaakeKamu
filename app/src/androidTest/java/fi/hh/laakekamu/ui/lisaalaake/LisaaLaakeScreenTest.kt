@@ -1,5 +1,7 @@
 package fi.hh.laakekamu.ui.lisaalaake
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -29,6 +31,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /** Wizard step 1 shows its validation errors and the duplicate message. */
+/** A field whose semantics error is [message]. */
+private fun hasError(message: String) =
+    SemanticsMatcher.expectValue(SemanticsProperties.Error, message)
+
 @RunWith(AndroidJUnit4::class)
 class LisaaLaakeScreenTest {
     @get:Rule
@@ -78,10 +84,11 @@ class LisaaLaakeScreenTest {
     fun emptyFields_showAnErrorUnderEachField() {
         compose.onNodeWithText("Seuraava vaihe").performScrollTo().performClick()
 
-        compose.onNodeWithText("Lääkkeen nimi puuttuu.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Valitse lääkkeen tyyppi.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Annosmäärä puuttuu.").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("Valitse yksikkö.").performScrollTo().assertIsDisplayed()
+        // Each field carries its error for TalkBack (the visible text is hidden from it).
+        compose.onNode(hasError("Lääkkeen nimi puuttuu.")).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasError("Valitse lääkkeen tyyppi.")).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasError("Annosmäärä puuttuu.")).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasError("Valitse yksikkö.")).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -89,9 +96,8 @@ class LisaaLaakeScreenTest {
         compose.onNodeWithContentDescription("Lääke").performTextInput("burana")
         compose.onNodeWithText("Seuraava vaihe").performScrollTo().performClick()
 
-        compose.onNodeWithText(
-            "Lääke \"burana\" on jo lisätty."
-        ).performScrollTo().assertIsDisplayed()
+        compose.onNode(hasError("Lääke \"burana\" on jo lisätty.")).performScrollTo()
+            .assertIsDisplayed()
     }
 
     @Test

@@ -3,6 +3,7 @@ package fi.hh.laakekamu.ui.lisaalaake
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -179,7 +180,9 @@ private fun Step2(state: LisaaLaakeUiState, viewModel: LisaaLaakeViewModel, modi
             TextButton(
                 onClick = viewModel::onLisaaAika,
                 enabled = state.ajatEnabled,
-                modifier = Modifier.heightIn(min = 48.dp)
+                modifier = Modifier.heightIn(min = 48.dp),
+                // Text flush with the fields' left edge.
+                contentPadding = PaddingValues(vertical = 8.dp)
             ) {
                 Text(
                     text = stringResource(R.string.lisaa_aika),

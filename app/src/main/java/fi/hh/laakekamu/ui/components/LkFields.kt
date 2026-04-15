@@ -107,7 +107,9 @@ private fun LabeledField(
                 text = error,
                 style = MaterialTheme.typography.bodyMedium,
                 color = LkDanger,
-                modifier = Modifier.padding(top = 4.dp)
+                // The field itself announces the error (semantics error), so TalkBack doesn't
+                // read it twice.
+                modifier = Modifier.padding(top = 4.dp).clearAndSetSemantics {}
             )
         } else if (hint != null) {
             Text(
