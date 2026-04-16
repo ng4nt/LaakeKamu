@@ -331,11 +331,16 @@ fun LkDateField(
             ) {
                 // Again inside the dialog window, which resets the locale. The
                 // headline uses headlineLarge, which is 32 Bold here: too wide for "Valittu
-                // päivämäärä", so the picker gets the 25sp style.
+                // päivämäärä", so the picker gets the 25sp style. Days, weekdays and years use
+                // bodyLarge (20sp here, M3's own is 16) in fixed 40dp cells, so they get 16sp too
+                // and still fit at large font sizes.
                 val typography = MaterialTheme.typography
                 ProvideFinnishLocale {
                     MaterialTheme(
-                        typography = typography.copy(headlineLarge = typography.headlineSmall)
+                        typography = typography.copy(
+                            headlineLarge = typography.headlineSmall,
+                            bodyLarge = typography.bodySmall
+                        )
                     ) {
                         DatePicker(
                             state = state,

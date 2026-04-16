@@ -30,11 +30,11 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Wizard step 1 shows its validation errors and the duplicate message. */
 /** A field whose semantics error is [message]. */
 private fun hasError(message: String) =
     SemanticsMatcher.expectValue(SemanticsProperties.Error, message)
 
+/** Wizard step 1 shows its validation errors and the duplicate message. */
 @RunWith(AndroidJUnit4::class)
 class LisaaLaakeScreenTest {
     @get:Rule
