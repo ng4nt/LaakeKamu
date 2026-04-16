@@ -84,7 +84,13 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                     onEdit = {}
                 )
             }
-            composable(MainDestination.ETUSIVU.route) { EtusivuScreen() }
+            composable(MainDestination.ETUSIVU.route) {
+                EtusivuScreen(
+                    onAdd = {
+                        navController.navigate(FormRoute.LISAA_LAAKE) { launchSingleTop = true }
+                    }
+                )
+            }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }
             composable(FormRoute.LISAA_LAAKE) {
                 LisaaLaakeScreen(

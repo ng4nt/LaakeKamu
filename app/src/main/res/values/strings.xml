@@ -64,6 +64,14 @@
     <string name="laakelista_tyhja">Lääkelista on tyhjä. Lisää ensimmäinen lääke Lisää-painikkeesta.</string>
     <string name="virhe_lista">Lääkelistaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
 
+    <!-- Etusivu -->
+    <string name="ei_laakkeita_paivalle">Ei lääkkeitä tälle päivälle</string>
+    <string name="lisaa_laake">Lisää lääke</string>
+    <string name="ottamatta">ottamatta</string>
+    <string name="tila_tulossa">tulossa</string>
+    <string name="tila_otettu">otettu</string>
+    <string name="virhe_etusivu">Päivän lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>
     <string name="kesto_jaljella">vielä %1$d pv</string>

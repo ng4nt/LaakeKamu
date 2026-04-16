@@ -35,5 +35,7 @@ class AppContainer(
 
     val laakeRepository: LaakeRepository by lazy { RoomLaakeRepository(::database, clock) }
 
+    val annosRepository: AnnosRepository by lazy { RoomAnnosRepository(::database) }
+
     val oireRepository: OireRepository by lazy { OireRepository(::database) }
 }

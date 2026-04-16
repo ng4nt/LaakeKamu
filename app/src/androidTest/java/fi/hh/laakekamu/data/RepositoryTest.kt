@@ -311,6 +311,27 @@ class RepositoryTest {
     }
 
     @Test
+    fun annosRepository_keepsDeletedMedications_andReportsTodaysTakenDoses() = runTest {
+        val annokset = RoomAnnosRepository { db }
+        val id = laakkeet.add(laake(), listOf(480, 1200))
+        val (morning, evening) = reminders(id).sortedBy { it.aika }.map { it.muistutusId }
+        take(morning, today)
+        take(evening, yesterday)
+
+        laakkeet.delete(id)
+
+        assertEquals(listOf(id), annokset.observeLaakkeet().first().map { it.laakeId })
+        assertEquals(
+            setOf(morning, evening),
+            annokset.observeMuistutukset().first().map {
+                it.muistutusId
+            }.toSet()
+        )
+        assertEquals(setOf(morning), annokset.observeOtetut(today).first())
+        assertEquals(setOf(evening), annokset.observeOtetut(yesterday).first())
+    }
+
+    @Test
     fun update_endDateMovedIntoThePast_isRejected() = runTest {
         val id = laakkeet.add(laake(), listOf(480))
         val reminder = reminders(id).single().muistutusId

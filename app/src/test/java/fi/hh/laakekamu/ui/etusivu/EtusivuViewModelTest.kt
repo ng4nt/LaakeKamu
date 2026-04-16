@@ -1,0 +1,208 @@
+package fi.hh.laakekamu.ui.etusivu
+
+import fi.hh.laakekamu.data.AnnosRepository
+import fi.hh.laakekamu.data.entity.Laake
+import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.domain.AnnoksenTila
+import fi.hh.laakekamu.domain.KuinkaUsein
+import java.time.Clock
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class EtusivuViewModelTest {
+    private val zone = ZoneId.of("Europe/Helsinki")
+    private val today = LocalDate.of(2025, 12, 18)
+    private val yesterday = today.minusDays(1)
+
+    /** 10.00 today. */
+    private val now = ZonedDateTime.of(today.atTime(10, 0), zone)
+
+    @Before
+    fun setMain() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+    }
+
+    @After
+    fun resetMain() {
+        Dispatchers.resetMain()
+    }
+
+    // Which doses are due
+
+    @Test
+    fun today_showsCurrentReminders_groupedByTime_inFinnishOrder() {
+        val b = laake(1, "Öljy")
+        val a = laake(2, "Burana")
+        val reminders = listOf(muistutus(1, 1, 480), muistutus(2, 2, 480), muistutus(3, 2, 1200))
+
+        val ryhmat = etusivunRyhmat(today, now, listOf(b, a), reminders, emptySet())
+
+        assertEquals(listOf(480, 1200), ryhmat.map { it.aika })
+        assertEquals(listOf("Burana", "Öljy"), ryhmat[0].rivit.map { it.nimi })
+        assertEquals(listOf(Vuorokausi.AAMU, Vuorokausi.ILTA), ryhmat.map { it.vuorokausi })
+    }
+
+    @Test
+    fun endedNotStartedAndOutOfRangeReminders_areNotDue() {
+        val running = laake(1, "A")
+        val ended = laake(2, "B", end = yesterday)
+        val reminders = listOf(
+            muistutus(1, 1, 480, asti = yesterday),
+            muistutus(2, 1, 540, alkaen = today.plusDays(1)),
+            muistutus(3, 2, 600)
+        )
+
+        assertTrue(
+            etusivunRyhmat(today, now, listOf(running, ended), reminders, emptySet()).isEmpty()
+        )
+    }
+
+    @Test
+    fun aDeletedMedication_isGoneToday_butKeepsItsPastDays() {
+        // Deleted today after taking its dose: the reminder is valid until today.
+        val deleted = laake(1, "A").copy(aktiivinen = false)
+        val reminders = listOf(muistutus(1, 1, 480, asti = today))
+
+        assertTrue(etusivunRyhmat(today, now, listOf(deleted), reminders, setOf(1L)).isEmpty())
+        val past = etusivunRyhmat(yesterday, now, listOf(deleted), reminders, emptySet())
+        assertEquals(listOf("A"), past.single().rivit.map { it.nimi })
+    }
+
+    @Test
+    fun aMedicationNowAsNeeded_keepsItsPastDailyDoses() {
+        // Switched to Tarvittaessa today: its reminder ended yesterday.
+        val switched = laake(1, "A", kuinkaUsein = KuinkaUsein.TARVITTAESSA)
+        val reminders = listOf(muistutus(1, 1, 480, asti = yesterday))
+
+        assertTrue(etusivunRyhmat(today, now, listOf(switched), reminders, emptySet()).isEmpty())
+        assertEquals(
+            1,
+            etusivunRyhmat(yesterday, now, listOf(switched), reminders, emptySet()).size
+        )
+    }
+
+    // States
+
+    @Test
+    fun states_followL2_atTenOClock() {
+        val laake = laake(1, "A")
+        val reminders = listOf(muistutus(1, 1, 480), muistutus(2, 1, 540), muistutus(3, 1, 720))
+
+        val ryhmat = etusivunRyhmat(today, now, listOf(laake), reminders, setOf(2L))
+
+        assertEquals(
+            listOf(AnnoksenTila.OTTAMATTA, AnnoksenTila.OTETTU, AnnoksenTila.TULOSSA),
+            ryhmat.map { it.rivit.single().tila }
+        )
+        assertEquals(Vuorokausi.PAIVA, ryhmat[2].vuorokausi)
+    }
+
+    @Test
+    fun sunAndMoon_switchAt11And17() {
+        assertEquals(Vuorokausi.AAMU, AnnosRyhma(10 * 60 + 59, emptyList()).vuorokausi)
+        assertEquals(Vuorokausi.PAIVA, AnnosRyhma(11 * 60, emptyList()).vuorokausi)
+        assertEquals(Vuorokausi.PAIVA, AnnosRyhma(16 * 60 + 59, emptyList()).vuorokausi)
+        assertEquals(Vuorokausi.ILTA, AnnosRyhma(17 * 60, emptyList()).vuorokausi)
+    }
+
+    // ViewModel
+
+    @Test
+    fun theViewModel_showsTodayFromTheRepository() = runTest {
+        val repository = FakeAnnosRepository()
+        repository.laakkeet.value = listOf(laake(1, "A"))
+        repository.muistutukset.value = listOf(muistutus(1, 1, 480), muistutus(2, 1, 1200))
+        repository.otetut.value = mapOf(today to setOf(1L))
+        val vm = EtusivuViewModel(repository, Clock.fixed(now.toInstant(), zone))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        val state = vm.uiState.value
+        assertEquals(today, state.paiva)
+        assertEquals(
+            listOf(AnnoksenTila.OTETTU, AnnoksenTila.TULOSSA),
+            state.ryhmat.map { it.rivit.single().tila }
+        )
+    }
+
+    @Test
+    fun noDosesToday_isTheEmptyState_andAFailedQueryAnErrorState() = runTest {
+        val empty = EtusivuViewModel(FakeAnnosRepository(), Clock.fixed(now.toInstant(), zone))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { empty.uiState.collect {} }
+        assertTrue(empty.uiState.value.isEmpty)
+
+        val failing = EtusivuViewModel(
+            FakeAnnosRepository(fail = true),
+            Clock.fixed(now.toInstant(), zone)
+        )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            failing.uiState.collect {}
+        }
+        assertTrue(failing.uiState.value.loadError)
+    }
+
+    private fun laake(
+        id: Long,
+        nimi: String,
+        kuinkaUsein: KuinkaUsein = KuinkaUsein.PAIVITTAIN,
+        end: LocalDate? = null
+    ) = Laake(
+        laakeId = id,
+        nimi = nimi,
+        tyyppiId = 1,
+        annosmaara = "5",
+        yksikko = "mg",
+        kuinkaUsein = kuinkaUsein,
+        aloituspv = today.minusDays(10),
+        lopetuspv = end
+    )
+
+    private fun muistutus(
+        id: Long,
+        laakeId: Long,
+        aika: Int,
+        alkaen: LocalDate = today.minusDays(10),
+        asti: LocalDate? = null
+    ) = Muistutus(
+        muistutusId = id,
+        laakeId = laakeId,
+        aika = aika,
+        voimassaAlkaen = alkaen,
+        voimassaAsti = asti
+    )
+}
+
+/** In-memory [AnnosRepository]; [fail] makes the medication query fail. */
+private class FakeAnnosRepository(private val fail: Boolean = false) : AnnosRepository {
+    val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
+    val muistutukset = MutableStateFlow<List<Muistutus>>(emptyList())
+    val otetut = MutableStateFlow<Map<LocalDate, Set<Long>>>(emptyMap())
+
+    override fun observeLaakkeet(): Flow<List<Laake>> = if (fail) {
+        flow { throw IllegalStateException("database unavailable") }
+    } else {
+        laakkeet
+    }
+
+    override fun observeMuistutukset(): Flow<List<Muistutus>> = muistutukset
+
+    override fun observeOtetut(paiva: LocalDate): Flow<Set<Long>> =
+        otetut.map { it[paiva].orEmpty() }
+}

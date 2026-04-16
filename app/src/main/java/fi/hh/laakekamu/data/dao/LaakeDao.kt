@@ -28,4 +28,8 @@ interface LaakeDao {
     /** The same as [observeActive], once (for the name check). */
     @Query("SELECT * FROM Laakkeet WHERE aktiivinen = 1")
     suspend fun getActive(): List<Laake>
+
+    /** Every medication, deleted ones too: past days on Etusivu still show their doses. */
+    @Query("SELECT * FROM Laakkeet")
+    fun observeAll(): Flow<List<Laake>>
 }
