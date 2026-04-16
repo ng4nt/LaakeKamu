@@ -72,16 +72,21 @@ fun changeTime(
 }
 
 /**
- * The medication's start date was edited. Current reminders that haven't started before
- * today move to max(today, [newAloituspv]). If a reminder started today, its dose was already
- * taken and the start moves into the future, the reminder ends today and a new one starts on the
- * new date, so the taken row stays inside its reminder's validity. (The dose is then no longer due today, because
- * the medication now starts later, so Home hides it; the diary still lists the taken row.)
- * Reminders that started earlier are left alone (documented limitation: existing history isn't
- * rewritten).
+ * The medication's start date was edited from [oldAloituspv] to [newAloituspv]. Current
+ * reminders that haven't started before today move to max(today, [newAloituspv]): later when
+ * that is after their start, earlier only when they were waiting for the old start date. A
+ * reminder that rules started tomorrow (a time changed after its dose was taken today)
+ * keeps its start, so moving the medication's start into the past doesn't make that dose due a
+ * second time today. If a reminder started today, its dose was already taken and
+ * the start moves into the future, the reminder ends today and a new one starts on the new date,
+ * so the taken row stays inside its reminder's validity. (The dose is then no longer due today,
+ * because the medication now starts later, so Home hides it; the diary still lists the taken
+ * row.) Reminders that started earlier are left alone (documented limitation: existing history
+ * isn't rewritten).
  */
 fun moveStart(
     current: List<Muistutusjakso>,
+    oldAloituspv: LocalDate,
     newAloituspv: LocalDate,
     today: LocalDate,
     takenToday: Set<Long>
@@ -89,7 +94,13 @@ fun moveStart(
     val newStart = maxOf(today, newAloituspv)
     return current
         .filter { it.voimassaAsti == null && !it.voimassaAlkaen.isBefore(today) }
-        .filter { it.voimassaAlkaen != newStart }
+        .filter { jakso ->
+            when {
+                newStart.isAfter(jakso.voimassaAlkaen) -> true
+                newStart.isBefore(jakso.voimassaAlkaen) -> jakso.voimassaAlkaen == oldAloituspv
+                else -> false
+            }
+        }
         .flatMap { jakso ->
             // A reminder that starts later can't end today; a row for it is a stray.
             if (jakso.id in takenToday && jakso.voimassaAlkaen == today) {

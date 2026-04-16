@@ -151,7 +151,13 @@ class RoomLaakeRepository(
             if (laake.aloituspv != old.aloituspv) {
                 val afterTimes = currentJaksot(db, laake.laakeId)
                 val moves =
-                    moveStart(afterTimes, laake.aloituspv, today, takenToday(db, afterTimes, today))
+                    moveStart(
+                        afterTimes,
+                        old.aloituspv,
+                        laake.aloituspv,
+                        today,
+                        takenToday(db, afterTimes, today)
+                    )
                 apply(db, laake.laakeId, afterTimes, capped(moves, afterTimes))
             }
             // ...and last, reopening after an old end date, so the gap days stay not due.

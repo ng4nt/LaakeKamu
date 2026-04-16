@@ -283,6 +283,34 @@ class RepositoryTest {
     }
 
     @Test
+    fun update_startCorrectedIntoThePast_afterTakingAndChangingATime_addsNoDoseToday() = runTest {
+        // 8.00 taken and changed to 9.00 (9.00 from tomorrow), then the start date is
+        // corrected into the past, in a second save and in one save.
+        for (oneSave in listOf(false, true)) {
+            val nimi = if (oneSave) "Yksi tallennus" else "Kaksi tallennusta"
+            val id = laakkeet.add(laake(nimi = nimi), listOf(480))
+            db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+            val eight = oldReminder(id, 480)
+            take(eight, today)
+            val corrected = laake(nimi = nimi, aloituspv = today.minusDays(8)).copy(laakeId = id)
+
+            if (oneSave) {
+                laakkeet.update(corrected, listOf(EditedTime(eight, 540)))
+            } else {
+                laakkeet.update(
+                    laake(nimi = nimi).copy(laakeId = id),
+                    listOf(EditedTime(eight, 540))
+                )
+                val nine = reminders(id).single { it.voimassaAsti == null }.muistutusId
+                laakkeet.update(corrected, listOf(EditedTime(nine, 540)))
+            }
+
+            val nine = reminders(id).single { it.voimassaAsti == null }
+            assertEquals(nimi, today.plusDays(1), nine.voimassaAlkaen)
+        }
+    }
+
+    @Test
     fun update_endDateMovedIntoThePast_isRejected() = runTest {
         val id = laakkeet.add(laake(), listOf(480))
         val reminder = reminders(id).single().muistutusId

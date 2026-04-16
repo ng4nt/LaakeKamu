@@ -91,7 +91,13 @@ class MuistutusRulesTest {
         val ended = jakso(3, 1200, today.minusDays(10), asti = yesterday)
         assertEquals(
             listOf(Muutos.SiirraAlku(2, today.plusDays(7))),
-            moveStart(listOf(started, notStarted, ended), today.plusDays(7), today, emptySet())
+            moveStart(
+                listOf(started, notStarted, ended),
+                oldAloituspv = tomorrow,
+                newAloituspv = today.plusDays(7),
+                today = today,
+                takenToday = emptySet()
+            )
         )
     }
 
@@ -100,7 +106,27 @@ class MuistutusRulesTest {
         val notStarted = jakso(2, 720, today.plusDays(3))
         assertEquals(
             listOf(Muutos.SiirraAlku(2, today)),
-            moveStart(listOf(notStarted), today.minusDays(3), today, emptySet())
+            moveStart(listOf(notStarted), today.plusDays(3), today.minusDays(3), today, emptySet())
+        )
+    }
+
+    @Test
+    fun startEdit_toThePast_keepsAReminderThatL1StartedTomorrow() {
+        // 8.00 taken today and changed to 9.00 (9.00 starts tomorrow); then the medication's
+        // start is corrected from 1.12 to 3.12, both in the past.
+        val nine = jakso(2, 540, tomorrow)
+        assertEquals(
+            emptyList<Muutos>(),
+            moveStart(listOf(nine), today.minusDays(17), today.minusDays(15), today, emptySet())
+        )
+    }
+
+    @Test
+    fun startEdit_later_stillMovesAReminderThatL1StartedTomorrow() {
+        val nine = jakso(2, 540, tomorrow)
+        assertEquals(
+            listOf(Muutos.SiirraAlku(2, today.plusDays(5))),
+            moveStart(listOf(nine), today.minusDays(17), today.plusDays(5), today, emptySet())
         )
     }
 
@@ -109,7 +135,7 @@ class MuistutusRulesTest {
         val startedToday = jakso(2, 720, today)
         assertEquals(
             listOf(Muutos.Paata(2, today), Muutos.Lisaa(720, today.plusDays(7))),
-            moveStart(listOf(startedToday), today.plusDays(7), today, takenToday = setOf(2L))
+            moveStart(listOf(startedToday), today, today.plusDays(7), today, setOf(2L))
         )
     }
 
@@ -257,7 +283,13 @@ class MuistutusRulesTest {
         // Only a reminder that started today can end today.
         assertEquals(
             listOf(Muutos.SiirraAlku(1, today.plusDays(3))),
-            moveStart(listOf(jakso(1, 480, tomorrow)), today.plusDays(3), today, setOf(1L))
+            moveStart(
+                listOf(jakso(1, 480, tomorrow)),
+                tomorrow,
+                today.plusDays(3),
+                today,
+                setOf(1L)
+            )
         )
     }
 
