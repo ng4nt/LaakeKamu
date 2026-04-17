@@ -10,6 +10,7 @@ import fi.hh.laakekamu.data.AnnosRepository
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Muistutus
 import fi.hh.laakekamu.domain.AnnoksenTila
+import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.isDueOn
 import fi.hh.laakekamu.domain.tilaOf
 import fi.hh.laakekamu.ui.format.SUOMI
@@ -71,8 +72,10 @@ data class EtusivuUiState(
  * The doses due on [paiva] at [now], grouped by time and in Finnish name order within a
  * time. A dose is due when its reminder and its medication are both valid that day; as-needed
  * medications have no reminders, so they never show. Today and later also need the medication to
- * be active (a medication deleted after today's dose was taken keeps a reminder valid until
- * today); past days ignore `aktiivinen` and the current frequency, so their history stays.
+ * be active and daily: a medication deleted, or switched to Tarvittaessa, after today's dose was
+ * taken keeps a reminder valid until today, and still isn't shown (the diary
+ * keeps the taken dose). Past days ignore `aktiivinen` and the current frequency, so their
+ * history stays.
  * [otetut] are the reminder ids taken on [paiva]; the state follows the dose state rules.
  */
 fun etusivunRyhmat(
@@ -88,7 +91,8 @@ fun etusivunRyhmat(
     return muistutukset
         .mapNotNull { muistutus ->
             val laake = byId[muistutus.laakeId] ?: return@mapNotNull null
-            if (!paiva.isBefore(today) && !laake.aktiivinen) return@mapNotNull null
+            val shownFromToday = laake.aktiivinen && laake.kuinkaUsein == KuinkaUsein.PAIVITTAIN
+            if (!paiva.isBefore(today) && !shownFromToday) return@mapNotNull null
             val due = isDueOn(
                 paiva,
                 muistutus.voimassaAlkaen,
@@ -123,7 +127,12 @@ class EtusivuViewModel(repository: AnnosRepository, clock: Clock) : ViewModel() 
             emit(current)
             delay(MINUTE_MILLIS - current.second * 1_000L - current.nano / 1_000_000L)
         }
-    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(), replay = 1)
+    }.shareIn(
+        viewModelScope,
+        // Don't replay an old tick when the screen comes back (e.g. the next morning).
+        SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+        replay = 1
+    )
 
     // The taken doses of the day "now" is on; tagged with that day, because just after midnight
     // the old day's set can still arrive with the new time.
@@ -148,7 +157,12 @@ class EtusivuViewModel(repository: AnnosRepository, clock: Clock) : ViewModel() 
     }
         // An error state instead of an ended collection.
         .catch { emit(EtusivuUiState(loading = false, loadError = true)) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), EtusivuUiState())
+        .stateIn(
+            viewModelScope,
+            // Back after a pause: start from loading, not from a list of another day.
+            SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0),
+            EtusivuUiState()
+        )
 
     companion object {
         private const val MINUTE_MILLIS = 60_000L

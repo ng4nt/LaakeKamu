@@ -87,6 +87,20 @@ class EtusivuViewModelTest {
     }
 
     @Test
+    fun aMedicationSwitchedToAsNeededAfterTakingToday_isGoneToday() {
+        // Its reminder is valid until today because today's dose was taken; still
+        // hides it on Home today, as a delete would.
+        val switched = laake(1, "A", kuinkaUsein = KuinkaUsein.TARVITTAESSA)
+        val reminders = listOf(muistutus(1, 1, 480, asti = today))
+
+        assertTrue(etusivunRyhmat(today, now, listOf(switched), reminders, setOf(1L)).isEmpty())
+        assertEquals(
+            1,
+            etusivunRyhmat(yesterday, now, listOf(switched), reminders, emptySet()).size
+        )
+    }
+
+    @Test
     fun aMedicationNowAsNeeded_keepsItsPastDailyDoses() {
         // Switched to Tarvittaessa today: its reminder ended yesterday.
         val switched = laake(1, "A", kuinkaUsein = KuinkaUsein.TARVITTAESSA)
