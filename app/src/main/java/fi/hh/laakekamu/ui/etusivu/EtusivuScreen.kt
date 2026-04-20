@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -141,10 +142,12 @@ private fun AnnosRow(rivi: AnnosRivi) {
                 color = Color.Black
             )
             if (missed) {
+                // The row's state already says "ottamatta" to TalkBack.
                 Text(
                     text = stringResource(R.string.ottamatta),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = LkDanger
+                    color = LkDanger,
+                    modifier = Modifier.clearAndSetSemantics {}
                 )
             }
         }
@@ -159,7 +162,11 @@ private fun AnnosRow(rivi: AnnosRivi) {
 private fun Checkbox(missed: Boolean) {
     if (missed) {
         Box(
-            modifier = Modifier.size(CHECKBOX).border(MISSED_BORDER, LkDanger),
+            // Decorative: TalkBack reads the row's state instead of the "!".
+            modifier = Modifier
+                .size(CHECKBOX)
+                .border(MISSED_BORDER, LkDanger)
+                .clearAndSetSemantics {},
             contentAlignment = Alignment.Center
         ) {
             Text(
