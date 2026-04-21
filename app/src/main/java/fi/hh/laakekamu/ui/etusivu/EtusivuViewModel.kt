@@ -11,6 +11,7 @@ import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Muistutus
 import fi.hh.laakekamu.domain.AnnoksenTila
 import fi.hh.laakekamu.domain.KuinkaUsein
+import fi.hh.laakekamu.domain.canToggle
 import fi.hh.laakekamu.domain.isDueOn
 import fi.hh.laakekamu.domain.tilaOf
 import fi.hh.laakekamu.ui.format.SUOMI
@@ -18,9 +19,11 @@ import java.text.Collator
 import java.time.Clock
 import java.time.LocalDate
 import java.time.ZonedDateTime
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
@@ -31,10 +34,12 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
-/** One dose on Etusivu: "name **dose**" and its state. */
+/** One dose on Etusivu (reminder [muistutusId] on [paiva]): "name **dose**" and its state. */
 data class AnnosRivi(
     val muistutusId: Long,
+    val paiva: LocalDate,
     val nimi: String,
     val annosmaara: String,
     val yksikko: String,
@@ -63,7 +68,9 @@ data class EtusivuUiState(
     val ryhmat: List<AnnosRyhma> = emptyList(),
     val loading: Boolean = true,
     /** The doses couldn't be read (e.g. database unavailable). */
-    val loadError: Boolean = false
+    val loadError: Boolean = false,
+    /** The last tick or untick couldn't be saved; cleared by the next one that is. */
+    val toggleError: Boolean = false
 ) {
     val isEmpty: Boolean get() = !loading && !loadError && ryhmat.isEmpty()
 }
@@ -104,6 +111,7 @@ fun etusivunRyhmat(
             val taken = muistutus.muistutusId in otetut
             muistutus.aika to AnnosRivi(
                 muistutusId = muistutus.muistutusId,
+                paiva = paiva,
                 nimi = laake.nimi,
                 annosmaara = laake.annosmaara,
                 yksikko = laake.yksikko,
@@ -117,10 +125,11 @@ fun etusivunRyhmat(
 
 /**
  * Etusivu's state for today. "Now" ticks every minute on the minute, so a dose turns OTTAMATTA
- * when its time passes and the day follows midnight.
+ * when its time passes and the day follows midnight. Tapping a row ticks or unticks it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EtusivuViewModel(repository: AnnosRepository, clock: Clock) : ViewModel() {
+class EtusivuViewModel(private val repository: AnnosRepository, private val clock: Clock) :
+    ViewModel() {
     private val now: Flow<ZonedDateTime> = flow {
         while (true) {
             val current = ZonedDateTime.now(clock)
@@ -141,18 +150,22 @@ class EtusivuViewModel(repository: AnnosRepository, clock: Clock) : ViewModel() 
         .distinctUntilChanged()
         .flatMapLatest { day -> repository.observeOtetut(day).map { day to it } }
 
+    private val toggleError = MutableStateFlow(false)
+
     val uiState: StateFlow<EtusivuUiState> = combine(
         now,
         repository.observeLaakkeet(),
         repository.observeMuistutukset(),
-        otetut
-    ) { current, laakkeet, muistutukset, (day, taken) ->
+        otetut,
+        toggleError
+    ) { current, laakkeet, muistutukset, (day, taken), toggleFailed ->
         val paiva = current.toLocalDate()
         val otetutTanaan = if (day == paiva) taken else emptySet()
         EtusivuUiState(
             paiva = paiva,
             ryhmat = etusivunRyhmat(paiva, current, laakkeet, muistutukset, otetutTanaan),
-            loading = false
+            loading = false,
+            toggleError = toggleFailed
         )
     }
         // An error state instead of an ended collection.
@@ -163,6 +176,27 @@ class EtusivuViewModel(repository: AnnosRepository, clock: Clock) : ViewModel() 
             SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0),
             EtusivuUiState()
         )
+
+    /**
+     * Ticks the dose of [rivi] if the user saw it untaken, otherwise unticks it, on the row's
+     * own day (a tap just after midnight still marks the day on screen). Future days are
+     * read-only. The row shows the new state when the database flow emits it; a repeated tap
+     * before that writes the same state again, which changes nothing.
+     */
+    fun toggle(rivi: AnnosRivi) {
+        if (!canToggle(rivi.paiva, LocalDate.now(clock))) return
+        val otettu = rivi.tila != AnnoksenTila.OTETTU
+        viewModelScope.launch {
+            try {
+                repository.setOtettu(rivi.muistutusId, rivi.paiva, otettu)
+                toggleError.value = false
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toggleError.value = true
+            }
+        }
+    }
 
     companion object {
         private const val MINUTE_MILLIS = 60_000L

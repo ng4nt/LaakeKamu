@@ -312,7 +312,7 @@ class RepositoryTest {
 
     @Test
     fun annosRepository_keepsDeletedMedications_andReportsTodaysTakenDoses() = runTest {
-        val annokset = RoomAnnosRepository { db }
+        val annokset = RoomAnnosRepository({ db }, clock)
         val id = laakkeet.add(laake(), listOf(480, 1200))
         val (morning, evening) = reminders(id).sortedBy { it.aika }.map { it.muistutusId }
         take(morning, today)
@@ -329,6 +329,35 @@ class RepositoryTest {
         )
         assertEquals(setOf(morning), annokset.observeOtetut(today).first())
         assertEquals(setOf(evening), annokset.observeOtetut(yesterday).first())
+    }
+
+    @Test
+    fun annosRepository_ticksAndUnticks_onTheGivenDay_andRejectsFutureDays() = runTest {
+        // A tick is a row for that day with the tick time; both directions are
+        // idempotent (IGNORE keeps the first tick).
+        val annokset = RoomAnnosRepository({ db }, clock)
+        val id = laakkeet.add(laake(), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val reminder = oldReminder(id, 480)
+        val takenToday = suspend { db.laakkeenottoDao().observeBetween(today, today).first() }
+
+        annokset.setOtettu(reminder, today, true)
+        val first = takenToday().single()
+        assertEquals(clock.instant(), first.ottoaika)
+        annokset.setOtettu(reminder, today, true)
+        annokset.setOtettu(reminder, yesterday, true)
+        assertEquals(listOf(first), takenToday())
+        assertEquals(setOf(reminder), annokset.observeOtetut(yesterday).first())
+
+        annokset.setOtettu(reminder, today, false)
+        annokset.setOtettu(reminder, today, false)
+        assertEquals(emptySet<Long>(), annokset.observeOtetut(today).first())
+        assertEquals(setOf(reminder), annokset.observeOtetut(yesterday).first())
+
+        val tomorrow = today.plusDays(1)
+        val error = runCatching { annokset.setOtettu(reminder, tomorrow, true) }.exceptionOrNull()
+        assertTrue(error is IllegalArgumentException)
+        assertEquals(emptySet<Long>(), annokset.observeOtetut(tomorrow).first())
     }
 
     @Test

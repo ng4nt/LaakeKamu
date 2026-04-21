@@ -71,6 +71,7 @@
     <string name="tila_tulossa">tulossa</string>
     <string name="tila_otettu">otettu</string>
     <string name="virhe_etusivu">Päivän lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_merkinta">Muutosta ei voitu tallentaa. Yritä uudelleen.</string>
 
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Figma (Flaticon UIcons fi-rs-check), converted from the exported SVG; path data unchanged. The vector keeps its inset in the 31.875dp frame (17.69 % top, 0.36 % left). Keeps Figma's #374957 (not tinted), like the checkbox frame. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="31.875dp"
+    android:height="31.875dp"
+    android:viewportWidth="31.875"
+    android:viewportHeight="31.875">
+    <group
+        android:translateX="0.1147"
+        android:translateY="5.6387">
+        <path
+            android:fillColor="#FF374957"
+            android:pathData="M10.2452 21.6272C9.72204 21.6282 9.20389 21.5258 8.72047 21.3259C8.23705 21.126 7.79788 20.8325 7.4282 20.4624L0 13.0355L1.87797 11.1563L9.30617 18.5845C9.55523 18.8334 9.89299 18.9733 10.2452 18.9733C10.5973 18.9733 10.9351 18.8334 11.1841 18.5845L29.7686 0L31.6466 1.87797L13.0621 20.4624C12.6924 20.8325 12.2533 21.126 11.7698 21.3259C11.2864 21.5258 10.7683 21.6282 10.2452 21.6272Z" />
+    </group>
+</vector>

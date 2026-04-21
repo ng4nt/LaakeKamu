@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -22,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -172,6 +174,74 @@ class EtusivuViewModelTest {
         assertTrue(failing.uiState.value.loadError)
     }
 
+    // Ticking
+
+    @Test
+    fun tappingARow_ticksItOnItsDay_andTappingAgainUnticksIt() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 1200))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        vm.toggle(onlyRow(vm))
+        assertEquals(listOf(Write(1, today, true)), repository.writes)
+        assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+
+        vm.toggle(onlyRow(vm))
+        assertEquals(Write(1, today, false), repository.writes.last())
+        assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+    }
+
+    @Test
+    fun aMissedDose_canBeTickedLate() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertEquals(AnnoksenTila.OTTAMATTA, onlyRow(vm).tila)
+
+        vm.toggle(onlyRow(vm))
+
+        assertEquals(listOf(Write(1, today, true)), repository.writes)
+        assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+    }
+
+    @Test
+    fun pastDays_canBeTicked_futureDaysAreReadOnly() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        val row = AnnosRivi(1, today, "A", "5", "mg", AnnoksenTila.TULOSSA)
+
+        vm.toggle(row.copy(paiva = today.plusDays(1)))
+        assertEquals(emptyList<Write>(), repository.writes)
+
+        vm.toggle(row.copy(paiva = yesterday, tila = AnnoksenTila.OTTAMATTA))
+        assertEquals(listOf(Write(1, yesterday, true)), repository.writes)
+    }
+
+    @Test
+    fun aFailedTick_showsAnError_untilATickIsSaved() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 1200))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        repository.failWrites = true
+
+        vm.toggle(onlyRow(vm))
+        assertTrue(vm.uiState.value.toggleError)
+        assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+
+        repository.failWrites = false
+        vm.toggle(onlyRow(vm))
+        assertFalse(vm.uiState.value.toggleError)
+        assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+    }
+
+    /** A ViewModel at 10.00 today over one daily medication with [reminders]. */
+    private fun viewModelWith(
+        vararg reminders: Muistutus
+    ): Pair<FakeAnnosRepository, EtusivuViewModel> {
+        val repository = FakeAnnosRepository()
+        repository.laakkeet.value = listOf(laake(1, "A"))
+        repository.muistutukset.value = reminders.toList()
+        return repository to EtusivuViewModel(repository, Clock.fixed(now.toInstant(), zone))
+    }
+
+    private fun onlyRow(vm: EtusivuViewModel) = vm.uiState.value.ryhmat.single().rivit.single()
+
     private fun laake(
         id: Long,
         nimi: String,
@@ -203,11 +273,28 @@ class EtusivuViewModelTest {
     )
 }
 
-/** In-memory [AnnosRepository]; [fail] makes the medication query fail. */
+/** One [AnnosRepository.setOtettu] call. */
+private data class Write(val muistutusId: Long, val paiva: LocalDate, val otettu: Boolean)
+
+/**
+ * In-memory [AnnosRepository]; [fail] makes the medication query fail and [failWrites] the
+ * ticks. Saved ticks are recorded in [writes].
+ */
 private class FakeAnnosRepository(private val fail: Boolean = false) : AnnosRepository {
     val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
     val muistutukset = MutableStateFlow<List<Muistutus>>(emptyList())
     val otetut = MutableStateFlow<Map<LocalDate, Set<Long>>>(emptyMap())
+    val writes = mutableListOf<Write>()
+    var failWrites = false
+
+    override suspend fun setOtettu(muistutusId: Long, paiva: LocalDate, otettu: Boolean) {
+        if (failWrites) throw IllegalStateException("database unavailable")
+        writes += Write(muistutusId, paiva, otettu)
+        otetut.update { all ->
+            val day = all[paiva].orEmpty()
+            all + (paiva to if (otettu) day + muistutusId else day - muistutusId)
+        }
+    }
 
     override fun observeLaakkeet(): Flow<List<Laake>> = if (fail) {
         flow { throw IllegalStateException("database unavailable") }
