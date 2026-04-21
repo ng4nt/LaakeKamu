@@ -78,9 +78,9 @@ data class EtusivuUiState(
 /**
  * The doses due on [paiva] at [now], grouped by time and in Finnish name order within a
  * time. A dose is due when its reminder and its medication are both valid that day; as-needed
- * medications have no reminders, so they never show. Today and later also need the medication to
- * be active and daily: a medication deleted, or switched to Tarvittaessa, after today's dose was
- * taken keeps a reminder valid until today, and still isn't shown (the diary
+ * medications have no current reminders. Today and later also need the medication to be active
+ * and daily: a medication deleted, or switched to Tarvittaessa, after today's dose was taken
+ * keeps a reminder valid until today, and this check hides it (the diary
  * keeps the taken dose). Past days ignore `aktiivinen` and the current frequency, so their
  * history stays.
  * [otetut] are the reminder ids taken on [paiva]; the state follows the dose state rules.
@@ -172,10 +172,19 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         .catch { emit(EtusivuUiState(loading = false, loadError = true)) }
         .stateIn(
             viewModelScope,
-            // Back after a pause: start from loading, not from a list of another day.
-            SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0),
+            // The last state stays cached during a pause, so a list from the same day is shown at
+            // once and keeps its scroll position. One from another day isn't
+            // current, and the screen shows loading instead.
+            SharingStarted.WhileSubscribed(5_000),
             EtusivuUiState()
         )
+
+    /**
+     * False for a state cached before midnight and shown again after a pause: its list belongs
+     * to another day. Loading and error states have no day and are current.
+     */
+    fun isCurrent(state: EtusivuUiState): Boolean =
+        state.paiva == null || state.paiva == LocalDate.now(clock)
 
     /**
      * Ticks the dose of [rivi] if the user saw it untaken, otherwise unticks it, on the row's

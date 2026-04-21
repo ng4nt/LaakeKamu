@@ -79,7 +79,10 @@ fun EtusivuScreen(
     modifier: Modifier = Modifier,
     viewModel: EtusivuViewModel = viewModel(factory = EtusivuViewModel.Factory)
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val latest by viewModel.uiState.collectAsStateWithLifecycle()
+    // A list kept from before a pause over midnight is another day's: show loading until
+    // today's arrives.
+    val state = if (viewModel.isCurrent(latest)) latest else EtusivuUiState()
     Column(
         modifier
             .fillMaxSize()

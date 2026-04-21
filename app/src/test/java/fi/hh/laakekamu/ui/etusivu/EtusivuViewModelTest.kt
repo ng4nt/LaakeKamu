@@ -6,6 +6,7 @@ import fi.hh.laakekamu.data.entity.Muistutus
 import fi.hh.laakekamu.domain.AnnoksenTila
 import fi.hh.laakekamu.domain.KuinkaUsein
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -15,9 +16,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -84,6 +87,9 @@ class EtusivuViewModelTest {
         val reminders = listOf(muistutus(1, 1, 480, asti = today))
 
         assertTrue(etusivunRyhmat(today, now, listOf(deleted), reminders, setOf(1L)).isEmpty())
+        val open = listOf(muistutus(1, 1, 480))
+        val tomorrow = etusivunRyhmat(today.plusDays(1), now, listOf(deleted), open, emptySet())
+        assertTrue(tomorrow.isEmpty())
         val past = etusivunRyhmat(yesterday, now, listOf(deleted), reminders, emptySet())
         assertEquals(listOf("A"), past.single().rivit.map { it.nimi })
     }
@@ -172,6 +178,54 @@ class EtusivuViewModelTest {
             failing.uiState.collect {}
         }
         assertTrue(failing.uiState.value.loadError)
+    }
+
+    @Test
+    fun aPause_keepsTheSameDaysList_butOneFromBeforeMidnightIsNotCurrent() = runTest {
+        val clock = MutableClock(now.toInstant(), zone)
+        val repository = FakeAnnosRepository()
+        repository.laakkeet.value = listOf(laake(1, "A"))
+        repository.muistutukset.value = listOf(muistutus(1, 1, 480))
+        val vm = EtusivuViewModel(repository, clock)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+            .cancel()
+        advanceTimeBy(5_001)
+
+        // The same day: the list is still there, so the screen keeps its scroll.
+        assertEquals(1, vm.uiState.value.ryhmat.size)
+        assertTrue(vm.isCurrent(vm.uiState.value))
+
+        // The next morning it's yesterday's list until the new day's arrives.
+        clock.instant = today.plusDays(1).atTime(7, 0).atZone(zone).toInstant()
+        assertFalse(vm.isCurrent(vm.uiState.value))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertEquals(today.plusDays(1), vm.uiState.value.paiva)
+        assertTrue(vm.isCurrent(vm.uiState.value))
+    }
+
+    @Test
+    fun atMidnight_theNewDayStarts_withoutTodaysTicks() = runTest {
+        val clock = MutableClock(today.atTime(23, 59).atZone(zone).toInstant(), zone)
+        val repository = FakeAnnosRepository()
+        repository.laakkeet.value = listOf(laake(1, "A"))
+        repository.muistutukset.value = listOf(muistutus(1, 1, 480))
+        repository.otetut.value = mapOf(today to setOf(1L))
+        val vm = EtusivuViewModel(repository, clock)
+        val states = mutableListOf<EtusivuUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.toList(states)
+        }
+        assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+
+        val tomorrow = today.plusDays(1)
+        clock.instant = tomorrow.atStartOfDay(zone).toInstant()
+        advanceTimeBy(60_001)
+
+        assertEquals(tomorrow, vm.uiState.value.paiva)
+        assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+        // No state on the new day showed today's tick (the day tag on the taken set).
+        val newDay = states.filter { it.paiva == tomorrow }.flatMap { it.ryhmat }
+        assertTrue(newDay.flatMap { it.rivit }.none { it.tila == AnnoksenTila.OTETTU })
     }
 
     // Ticking
@@ -271,6 +325,15 @@ class EtusivuViewModelTest {
         voimassaAlkaen = alkaen,
         voimassaAsti = asti
     )
+}
+
+/** A clock the test can move. */
+private class MutableClock(var instant: Instant, private val zone: ZoneId) : Clock() {
+    override fun getZone(): ZoneId = zone
+
+    override fun withZone(zone: ZoneId): Clock = MutableClock(instant, zone)
+
+    override fun instant(): Instant = instant
 }
 
 /** One [AnnosRepository.setOtettu] call. */
