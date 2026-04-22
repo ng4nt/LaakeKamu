@@ -313,8 +313,11 @@ class RepositoryTest {
     @Test
     fun annosRepository_keepsDeletedMedications_andReportsTodaysTakenDoses() = runTest {
         val annokset = RoomAnnosRepository({ db }, clock)
-        val id = laakkeet.add(laake(), listOf(480, 1200))
-        val (morning, evening) = reminders(id).sortedBy { it.aika }.map { it.muistutusId }
+        // Reminders with history: one started today and untaken would be deleted outright.
+        val id = laakkeet.add(laake(), listOf(480))
+        db.muistutusDao().deleteById(reminders(id).single().muistutusId)
+        val morning = oldReminder(id, 480)
+        val evening = oldReminder(id, 1200)
         take(morning, today)
         take(evening, yesterday)
 
