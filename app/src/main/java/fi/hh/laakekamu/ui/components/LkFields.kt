@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -53,6 +54,7 @@ import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.format.ProvideFinnishLocale
 import fi.hh.laakekamu.ui.format.formatDate
@@ -333,13 +335,22 @@ fun LkDateField(
                 // headline uses headlineLarge, which is 32 Bold here: too wide for "Valittu
                 // päivämäärä", so the picker gets the 25sp style. Days, weekdays and years use
                 // bodyLarge (20sp here, M3's own is 16) in fixed 40dp cells, so they get 16sp too
-                // and still fit at large font sizes.
+                // and still fit at large font sizes. The month-year menu button
+                // uses the button style (20 Bold), and M3's header row gives it its full width
+                // first: at 200 % font "marraskuu 2026" squeezed the next-month arrow to a
+                // sliver. So it stays 20sp up to 140 % font and then shrinks to 14sp at 200 %
+                // (the dialog's own buttons keep 20).
                 val typography = MaterialTheme.typography
+                val monthLabel = minOf(20f, 28f / LocalDensity.current.fontScale)
                 ProvideFinnishLocale {
                     MaterialTheme(
                         typography = typography.copy(
                             headlineLarge = typography.headlineSmall,
-                            bodyLarge = typography.bodySmall
+                            bodyLarge = typography.bodySmall,
+                            labelLarge = typography.labelLarge.copy(
+                                fontSize = monthLabel.sp,
+                                lineHeight = (monthLabel * 1.4f).sp
+                            )
                         )
                     ) {
                         DatePicker(
@@ -347,6 +358,8 @@ fun LkDateField(
                             title = {
                                 Text(
                                     text = stringResource(R.string.valitse_paiva),
+                                    // The title fits at 200 %, so it keeps 20 Bold.
+                                    style = typography.labelLarge,
                                     modifier = Modifier.padding(
                                         start = 24.dp,
                                         end = 12.dp,
