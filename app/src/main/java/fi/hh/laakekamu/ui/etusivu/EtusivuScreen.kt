@@ -1,5 +1,6 @@
 package fi.hh.laakekamu.ui.etusivu
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,19 +19,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.SpanStyle
@@ -39,6 +44,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fi.hh.laakekamu.R
@@ -69,20 +75,42 @@ private val CHECK_INSET = 5.63.dp
 
 /**
  * Etusivu: today's doses grouped by time with sun/moon headings and their state; tapping
- * a row ticks or unticks it. The week strip and header, the progress dots
- * and the permission banners come above and around this list. [onAdd] opens the wizard
- * from the empty state.
+ * a row ticks or unticks it, and a tick that can't be saved is reported in
+ * [snackbarHostState]. The week strip and header, the progress dots and the
+ * permission banners come above and around this list. [onAdd] opens the wizard from the
+ * empty state.
  */
 @Composable
 fun EtusivuScreen(
     onAdd: () -> Unit,
+    snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
     viewModel: EtusivuViewModel = viewModel(factory = EtusivuViewModel.Factory)
 ) {
     val latest by viewModel.uiState.collectAsStateWithLifecycle()
-    // A list kept from before a pause over midnight is another day's: show loading until
-    // today's arrives.
-    val state = if (viewModel.isCurrent(latest)) latest else EtusivuUiState()
+    // The day the screen came to the foreground on. Coming back (also from a locked screen,
+    // which keeps the composition) refreshes it, so a list kept from before midnight shows as
+    // loading until today's arrives.
+    var shownDay by remember { mutableStateOf(viewModel.today()) }
+    LifecycleStartEffect(Unit) {
+        shownDay = viewModel.today()
+        onStopOrDispose {}
+    }
+    val state = shownState(latest, shownDay)
+
+    // Shown once; kept for the recreated screen if the activity is only rotating.
+    val virhe = stringResource(R.string.virhe_merkinta)
+    val activity = LocalActivity.current
+    LaunchedEffect(state.toggleError) {
+        if (state.toggleError) {
+            try {
+                snackbarHostState.showSnackbar(virhe, duration = SnackbarDuration.Long)
+            } finally {
+                if (activity?.isChangingConfigurations != true) viewModel.toggleErrorShown()
+            }
+        }
+    }
+
     Column(
         modifier
             .fillMaxSize()
@@ -92,15 +120,12 @@ fun EtusivuScreen(
         when {
             state.loadError -> Message(stringResource(R.string.virhe_etusivu))
             state.isEmpty -> EmptyState(onAdd)
-            else -> {
-                if (state.toggleError) ToggleError()
-                state.ryhmat.forEachIndexed { index, ryhma ->
-                    if (index > 0) Spacer(Modifier.height(GROUP_GAP))
-                    RyhmaOtsikko(ryhma)
-                    ryhma.rivit.forEachIndexed { rowIndex, rivi ->
-                        Spacer(Modifier.height(if (rowIndex == 0) HEADING_TO_ROW else ROW_GAP))
-                        AnnosRow(rivi, onToggle = { viewModel.toggle(rivi) })
-                    }
+            else -> state.ryhmat.forEachIndexed { index, ryhma ->
+                if (index > 0) Spacer(Modifier.height(GROUP_GAP))
+                RyhmaOtsikko(ryhma)
+                ryhma.rivit.forEachIndexed { rowIndex, rivi ->
+                    Spacer(Modifier.height(if (rowIndex == 0) HEADING_TO_ROW else ROW_GAP))
+                    AnnosRow(rivi, onToggle = { viewModel.toggle(rivi) })
                 }
             }
         }
@@ -129,19 +154,6 @@ private fun RyhmaOtsikko(ryhma: AnnosRyhma) {
             style = MaterialTheme.typography.bodyMedium
         )
     }
-}
-
-/** A failed tick: shown above the doses and read out by TalkBack when it appears. */
-@Composable
-private fun ToggleError() {
-    Text(
-        text = stringResource(R.string.virhe_merkinta),
-        style = MaterialTheme.typography.bodyMedium,
-        color = LkDanger,
-        modifier = Modifier
-            .padding(bottom = 24.dp)
-            .semantics { liveRegion = LiveRegionMode.Polite }
-    )
 }
 
 /**

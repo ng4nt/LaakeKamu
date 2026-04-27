@@ -69,11 +69,23 @@ data class EtusivuUiState(
     val loading: Boolean = true,
     /** The doses couldn't be read (e.g. database unavailable). */
     val loadError: Boolean = false,
-    /** The last tick or untick couldn't be saved; cleared by the next one that is. */
+    /**
+     * A tick or untick couldn't be saved. The screen shows it once as a snackbar and then calls
+     * [EtusivuViewModel.toggleErrorShown]; the next tap clears it too.
+     */
     val toggleError: Boolean = false
 ) {
     val isEmpty: Boolean get() = !loading && !loadError && ryhmat.isEmpty()
 }
+
+/**
+ * What Etusivu shows of [latest] when the screen last came to the foreground on [shownDay]. A
+ * list from an earlier day, kept from before a pause over midnight, shows as loading until the
+ * new day's list arrives. A later day is the midnight rollover while the
+ * screen is visible, so it's shown.
+ */
+fun shownState(latest: EtusivuUiState, shownDay: LocalDate): EtusivuUiState =
+    if (latest.paiva?.isBefore(shownDay) == true) EtusivuUiState() else latest
 
 /**
  * The doses due on [paiva] at [now], grouped by time and in Finnish name order within a
@@ -173,18 +185,14 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         .stateIn(
             viewModelScope,
             // The last state stays cached during a pause, so a list from the same day is shown at
-            // once and keeps its scroll position. One from another day isn't
-            // current, and the screen shows loading instead.
+            // once and keeps its scroll position. One from an earlier day is held
+            // back by the screen (shownState).
             SharingStarted.WhileSubscribed(5_000),
             EtusivuUiState()
         )
 
-    /**
-     * False for a state cached before midnight and shown again after a pause: its list belongs
-     * to another day. Loading and error states have no day and are current.
-     */
-    fun isCurrent(state: EtusivuUiState): Boolean =
-        state.paiva == null || state.paiva == LocalDate.now(clock)
+    /** Today in the injected clock's zone. */
+    fun today(): LocalDate = LocalDate.now(clock)
 
     /**
      * Ticks the dose of [rivi] if the user saw it untaken, otherwise unticks it, on the row's
@@ -193,18 +201,24 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
      * before that writes the same state again, which changes nothing.
      */
     fun toggle(rivi: AnnosRivi) {
-        if (!canToggle(rivi.paiva, LocalDate.now(clock))) return
+        if (!canToggle(rivi.paiva, today())) return
         val otettu = rivi.tila != AnnoksenTila.OTETTU
+        // A new tap starts without the old error, so a repeated failure is shown again.
+        toggleError.value = false
         viewModelScope.launch {
             try {
                 repository.setOtettu(rivi.muistutusId, rivi.paiva, otettu)
-                toggleError.value = false
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 toggleError.value = true
             }
         }
+    }
+
+    /** The screen has shown the [EtusivuUiState.toggleError] message. */
+    fun toggleErrorShown() {
+        toggleError.value = false
     }
 
     companion object {

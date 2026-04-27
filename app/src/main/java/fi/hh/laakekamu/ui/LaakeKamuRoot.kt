@@ -88,7 +88,8 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                 EtusivuScreen(
                     onAdd = {
                         navController.navigate(FormRoute.LISAA_LAAKE) { launchSingleTop = true }
-                    }
+                    },
+                    snackbarHostState = snackbarHostState
                 )
             }
             composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }

@@ -181,7 +181,7 @@ class EtusivuViewModelTest {
     }
 
     @Test
-    fun aPause_keepsTheSameDaysList_butOneFromBeforeMidnightIsNotCurrent() = runTest {
+    fun aPause_keepsTheSameDaysList_butOneFromBeforeMidnightIsHeldBack() = runTest {
         val clock = MutableClock(now.toInstant(), zone)
         val repository = FakeAnnosRepository()
         repository.laakkeet.value = listOf(laake(1, "A"))
@@ -192,15 +192,25 @@ class EtusivuViewModelTest {
         advanceTimeBy(5_001)
 
         // The same day: the list is still there, so the screen keeps its scroll.
-        assertEquals(1, vm.uiState.value.ryhmat.size)
-        assertTrue(vm.isCurrent(vm.uiState.value))
+        assertEquals(1, shownState(vm.uiState.value, vm.today()).ryhmat.size)
 
-        // The next morning it's yesterday's list until the new day's arrives.
+        // The next morning it's yesterday's list, shown as loading until the new day's arrives
+        //.
         clock.instant = today.plusDays(1).atTime(7, 0).atZone(zone).toInstant()
-        assertFalse(vm.isCurrent(vm.uiState.value))
+        assertTrue(shownState(vm.uiState.value, vm.today()).loading)
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
-        assertEquals(today.plusDays(1), vm.uiState.value.paiva)
-        assertTrue(vm.isCurrent(vm.uiState.value))
+        assertEquals(today.plusDays(1), shownState(vm.uiState.value, vm.today()).paiva)
+    }
+
+    @Test
+    fun shownState_holdsBackOnlyAnEarlierDay() {
+        val list = EtusivuUiState(paiva = today, loading = false)
+        assertTrue(shownState(list, today.plusDays(1)).loading)
+        assertEquals(list, shownState(list, today))
+        // Midnight while the screen is visible: the new day replaces the day it was shown on.
+        assertEquals(list, shownState(list, yesterday))
+        val error = EtusivuUiState(loading = false, loadError = true)
+        assertEquals(error, shownState(error, today))
     }
 
     @Test
@@ -269,14 +279,24 @@ class EtusivuViewModelTest {
     }
 
     @Test
-    fun aFailedTick_showsAnError_untilATickIsSaved() = runTest {
+    fun aFailedTick_isReportedOnce_andEachNewTapStartsWithoutIt() = runTest {
         val (repository, vm) = viewModelWith(muistutus(1, 1, 1200))
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        val errors = mutableListOf<Boolean>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.collect { errors += it.toggleError }
+        }
         repository.failWrites = true
 
         vm.toggle(onlyRow(vm))
         assertTrue(vm.uiState.value.toggleError)
         assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+        vm.toggleErrorShown()
+        assertFalse(vm.uiState.value.toggleError)
+
+        // A second failure is a new message even if the first wasn't shown yet.
+        vm.toggle(onlyRow(vm))
+        vm.toggle(onlyRow(vm))
+        assertEquals(listOf(true, false, true), errors.takeLast(3))
 
         repository.failWrites = false
         vm.toggle(onlyRow(vm))

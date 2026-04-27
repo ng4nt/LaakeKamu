@@ -1,5 +1,7 @@
 package fi.hh.laakekamu.ui.etusivu
 
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -78,7 +80,11 @@ class EtusivuScreenTest {
         val viewModel = EtusivuViewModel(RoomAnnosRepository({ db }, clock), clock)
         compose.setContent {
             LaakeKamuTheme {
-                EtusivuScreen(onAdd = {}, viewModel = viewModel)
+                EtusivuScreen(
+                    onAdd = {},
+                    snackbarHostState = remember { SnackbarHostState() },
+                    viewModel = viewModel
+                )
             }
         }
     }
@@ -90,7 +96,10 @@ class EtusivuScreenTest {
 
     @Test
     fun tappingADoseRow_ticksIt_andTappingAgainUnticksIt() {
-        val row = compose.onNode(hasText("A iltalääke", substring = true) and isToggleable())
+        val doseRow = hasText("A iltalääke", substring = true) and isToggleable()
+        // The list comes from Room's own thread, which Compose's idling doesn't wait for.
+        compose.waitUntil(5_000) { compose.onAllNodes(doseRow).fetchSemanticsNodes().size == 1 }
+        val row = compose.onNode(doseRow)
         row.assertIsOff().assert(hasState("tulossa"))
 
         row.performClick()
