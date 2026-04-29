@@ -8,6 +8,7 @@ import fi.hh.laakekamu.domain.KuinkaUsein
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import kotlinx.coroutines.Dispatchers
@@ -203,12 +204,15 @@ class EtusivuViewModelTest {
     }
 
     @Test
-    fun shownState_holdsBackOnlyAnEarlierDay() {
-        val list = EtusivuUiState(paiva = today, loading = false)
+    fun shownState_holdsBackOnlyAStateFromAnEarlierDay() {
+        val list = EtusivuUiState(tanaan = today, paiva = today, loading = false)
         assertTrue(shownState(list, today.plusDays(1)).loading)
         assertEquals(list, shownState(list, today))
         // Midnight while the screen is visible: the new day replaces the day it was shown on.
         assertEquals(list, shownState(list, yesterday))
+        // A past day picked in the strip today isn't stale.
+        val picked = list.copy(paiva = yesterday)
+        assertEquals(picked, shownState(picked, today))
         val error = EtusivuUiState(loading = false, loadError = true)
         assertEquals(error, shownState(error, today))
     }
@@ -236,6 +240,101 @@ class EtusivuViewModelTest {
         // No state on the new day showed today's tick (the day tag on the taken set).
         val newDay = states.filter { it.paiva == tomorrow }.flatMap { it.ryhmat }
         assertTrue(newDay.flatMap { it.rivit }.none { it.tila == AnnoksenTila.OTETTU })
+    }
+
+    // Week strip and header
+
+    @Test
+    fun theWeek_isMondayToSunday() {
+        val week = (15..21).map { LocalDate.of(2025, 12, it) }
+        assertEquals(week, viikko(today)) // A Thursday.
+        assertEquals(week, viikko(week.first()))
+        assertEquals(week, viikko(week.last()))
+    }
+
+    @Test
+    fun theState_hasTheWeek_today_andTheCurrentMinute() = runTest {
+        val clock = MutableClock(now.plusSeconds(42).toInstant(), zone)
+        val (_, vm) = viewModelWith(clock, muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        val state = vm.uiState.value
+        assertEquals(viikko(today), state.viikko)
+        assertEquals(today, state.tanaan)
+        assertEquals(today, state.paiva)
+        assertEquals(LocalTime.of(10, 0), state.nyt)
+        assertTrue(state.muokattavissa)
+    }
+
+    @Test
+    fun aPickedPastDay_showsItsOwnTicks_andCanBeTicked() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        repository.otetut.value = mapOf(today to setOf(1L))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        vm.selectDay(yesterday)
+
+        assertEquals(yesterday, vm.uiState.value.paiva)
+        assertTrue(vm.uiState.value.muokattavissa)
+        assertEquals(AnnoksenTila.OTTAMATTA, onlyRow(vm).tila)
+        vm.toggle(onlyRow(vm))
+        assertEquals(listOf(Write(1, yesterday, true)), repository.writes)
+        assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+    }
+
+    @Test
+    fun aFutureDay_isReadOnly() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+
+        vm.selectDay(today.plusDays(1))
+
+        assertFalse(vm.uiState.value.muokattavissa)
+        assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+        vm.toggle(onlyRow(vm))
+        assertEquals(emptyList<Write>(), repository.writes)
+    }
+
+    @Test
+    fun switchingDays_neverShowsADayWithAnotherDaysTicks() = runTest {
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        repository.otetut.value = mapOf(today to setOf(1L))
+        val states = mutableListOf<EtusivuUiState>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            vm.uiState.toList(states)
+        }
+
+        vm.selectDay(yesterday)
+        vm.selectDay(today)
+
+        val tilat = states.filter { !it.loading }
+            .map { it.paiva to it.ryhmat.single().rivit.single().tila }
+        assertEquals(
+            listOf(
+                today to AnnoksenTila.OTETTU,
+                yesterday to AnnoksenTila.OTTAMATTA,
+                today to AnnoksenTila.OTETTU
+            ),
+            tilat
+        )
+    }
+
+    @Test
+    fun aDayPickedYesterday_givesWayToTheNewDay_andTodayFollowsMidnight() = runTest {
+        val clock = MutableClock(today.atTime(23, 59).atZone(zone).toInstant(), zone)
+        val (_, vm) = viewModelWith(clock, muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        vm.selectDay(yesterday)
+
+        clock.instant = today.plusDays(1).atStartOfDay(zone).toInstant()
+        advanceTimeBy(60_001)
+        assertEquals(today.plusDays(1), vm.uiState.value.paiva)
+
+        // Today, picked again, also follows the next midnight.
+        vm.selectDay(today.plusDays(1))
+        clock.instant = today.plusDays(2).atStartOfDay(zone).toInstant()
+        advanceTimeBy(60_001)
+        assertEquals(today.plusDays(2), vm.uiState.value.paiva)
     }
 
     // Ticking
@@ -305,13 +404,18 @@ class EtusivuViewModelTest {
     }
 
     /** A ViewModel at 10.00 today over one daily medication with [reminders]. */
+    private fun viewModelWith(vararg reminders: Muistutus) =
+        viewModelWith(Clock.fixed(now.toInstant(), zone), *reminders)
+
+    /** A ViewModel at [clock]'s time over one daily medication with [reminders]. */
     private fun viewModelWith(
+        clock: Clock,
         vararg reminders: Muistutus
     ): Pair<FakeAnnosRepository, EtusivuViewModel> {
         val repository = FakeAnnosRepository()
         repository.laakkeet.value = listOf(laake(1, "A"))
         repository.muistutukset.value = reminders.toList()
-        return repository to EtusivuViewModel(repository, Clock.fixed(now.toInstant(), zone))
+        return repository to EtusivuViewModel(repository, clock)
     }
 
     private fun onlyRow(vm: EtusivuViewModel) = vm.uiState.value.ryhmat.single().rivit.single()

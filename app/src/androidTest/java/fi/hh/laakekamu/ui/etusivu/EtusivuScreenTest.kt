@@ -5,12 +5,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isOn
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -94,11 +100,15 @@ class EtusivuScreenTest {
         db.close()
     }
 
+    private val doseRow = hasText("A iltalääke", substring = true) and isToggleable()
+
+    /** The list comes from Room's own thread, which Compose's idling doesn't wait for. */
+    private fun waitFor(matcher: SemanticsMatcher) =
+        compose.waitUntil(5_000) { compose.onAllNodes(matcher).fetchSemanticsNodes().size == 1 }
+
     @Test
     fun tappingADoseRow_ticksIt_andTappingAgainUnticksIt() {
-        val doseRow = hasText("A iltalääke", substring = true) and isToggleable()
-        // The list comes from Room's own thread, which Compose's idling doesn't wait for.
-        compose.waitUntil(5_000) { compose.onAllNodes(doseRow).fetchSemanticsNodes().size == 1 }
+        waitFor(doseRow)
         val row = compose.onNode(doseRow)
         row.assertIsOff().assert(hasState("tulossa"))
 
@@ -113,7 +123,27 @@ class EtusivuScreenTest {
         assertEquals(emptySet<Long>(), takenToday())
     }
 
-    private fun takenToday(): Set<Long> = runBlocking {
-        db.laakkeenottoDao().observeBetween(today, today).first().map { it.muistutusId }.toSet()
+    /** the week strip shows another day; a future day's doses can't be ticked. */
+    @Test
+    fun theWeekStrip_showsAnotherDay_andAFutureDayIsReadOnly() {
+        waitFor(doseRow)
+        compose.onNodeWithText("Tänään on torstai 18.12.", substring = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("torstai 18.12., tänään").assertIsSelected()
+
+        compose.onNodeWithContentDescription("perjantai 19.12.").performClick()
+        waitFor(hasText("Perjantai 19.12."))
+        compose.onNodeWithContentDescription("perjantai 19.12.").assertIsSelected()
+        compose.onNode(doseRow).assertIsNotEnabled().performClick()
+        assertEquals(emptySet<Long>(), takenOn(today.plusDays(1)))
+
+        compose.onNodeWithContentDescription("torstai 18.12., tänään").performClick()
+        waitFor(hasText("Tänään on torstai 18.12.", substring = true))
+        compose.onNode(doseRow).assertIsEnabled()
+    }
+
+    private fun takenToday(): Set<Long> = takenOn(today)
+
+    private fun takenOn(day: LocalDate): Set<Long> = runBlocking {
+        db.laakkeenottoDao().observeBetween(day, day).first().map { it.muistutusId }.toSet()
     }
 }

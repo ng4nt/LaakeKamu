@@ -72,6 +72,11 @@
     <string name="tila_otettu">otettu</string>
     <string name="virhe_etusivu">Päivän lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
     <string name="virhe_merkinta">Muutosta ei voitu tallentaa. Yritä uudelleen.</string>
+    <!-- Header: "Tänään on torstai 18.12." / "klo 7.00"; other days "Torstai 18.12." -->
+    <string name="tanaan_on">Tänään on %1$s %2$s\nklo %3$s</string>
+    <string name="paiva_ja_pvm">%1$s %2$s</string>
+    <!-- Week strip cell for TalkBack: "torstai 18.12., tänään" -->
+    <string name="paiva_tanaan">%1$s, tänään</string>
 
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>

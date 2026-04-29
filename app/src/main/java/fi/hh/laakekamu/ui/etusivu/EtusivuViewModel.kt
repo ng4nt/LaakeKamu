@@ -17,8 +17,12 @@ import fi.hh.laakekamu.domain.tilaOf
 import fi.hh.laakekamu.ui.format.SUOMI
 import java.text.Collator
 import java.time.Clock
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -29,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
@@ -62,10 +67,19 @@ data class AnnosRyhma(val aika: Int, val rivit: List<AnnosRivi>) {
 private const val MORNING_END = 11 * 60
 private const val EVENING_START = 17 * 60
 
-/** Etusivu: the selected day's doses, grouped by time. */
+/** Etusivu: this week's strip, the selected day and its doses grouped by time. */
 data class EtusivuUiState(
+    /** Today; null until the first state has loaded. */
+    val tanaan: LocalDate? = null,
+    /** The current minute, for the live header "Tänään on … klo 7.00". */
+    val nyt: LocalTime? = null,
+    /** The selected day: today, or another day of this week picked in the strip. */
     val paiva: LocalDate? = null,
+    /** This week, Monday to Sunday. */
+    val viikko: List<LocalDate> = emptyList(),
     val ryhmat: List<AnnosRyhma> = emptyList(),
+    /** Today and past days can be ticked; future days are read-only. */
+    val muokattavissa: Boolean = false,
     val loading: Boolean = true,
     /** The doses couldn't be read (e.g. database unavailable). */
     val loadError: Boolean = false,
@@ -80,12 +94,21 @@ data class EtusivuUiState(
 
 /**
  * What Etusivu shows of [latest] when the screen last came to the foreground on [shownDay]. A
- * list from an earlier day, kept from before a pause over midnight, shows as loading until the
- * new day's list arrives. A later day is the midnight rollover while the
- * screen is visible, so it's shown.
+ * state made on an earlier day, kept from before a pause over midnight, shows as loading until
+ * the new day's state arrives. A later day is the midnight rollover while
+ * the screen is visible, so it's shown. This compares the state's today, not the selected day,
+ * which may be in the past on purpose.
  */
 fun shownState(latest: EtusivuUiState, shownDay: LocalDate): EtusivuUiState =
-    if (latest.paiva?.isBefore(shownDay) == true) EtusivuUiState() else latest
+    if (latest.tanaan?.isBefore(shownDay) == true) EtusivuUiState() else latest
+
+/** The week of [day], Monday to Sunday (Finnish weeks start on Monday). */
+fun viikko(day: LocalDate): List<LocalDate> {
+    val monday = day.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
+    return (0L until DAYS_IN_WEEK).map { monday.plusDays(it) }
+}
+
+private const val DAYS_IN_WEEK = 7L
 
 /**
  * The doses due on [paiva] at [now], grouped by time and in Finnish name order within a
@@ -136,8 +159,9 @@ fun etusivunRyhmat(
 }
 
 /**
- * Etusivu's state for today. "Now" ticks every minute on the minute, so a dose turns OTTAMATTA
- * when its time passes and the day follows midnight. Tapping a row ticks or unticks it.
+ * Etusivu's state. "Now" ticks every minute on the minute, so the header's time is live, a dose
+ * turns OTTAMATTA when its time passes and the day follows midnight. A day of this week can
+ * be picked in the strip; tapping a row ticks or unticks it unless the day is in the future.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EtusivuViewModel(private val repository: AnnosRepository, private val clock: Clock) :
@@ -155,31 +179,48 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         replay = 1
     )
 
-    // The taken doses of the day "now" is on; tagged with that day, because just after midnight
-    // the old day's set can still arrive with the new time.
-    private val otetut = now
-        .map { it.toLocalDate() }
+    /** The day picked in the strip and the day it was picked on; null shows today. */
+    private val valittu = MutableStateFlow<Valinta?>(null)
+
+    // "Now" and the day shown. A day picked on an earlier day gives way to today, so a new day
+    // (and maybe a new week) starts on today.
+    private val nakyma = combine(now, valittu) { current, picked ->
+        val today = current.toLocalDate()
+        Nakyma(current, viikko(today), picked?.takeIf { it.tanaan == today }?.paiva ?: today)
+    }
+
+    // The taken doses of the day shown, tagged with that day: after a tap on the strip or at
+    // midnight, the old day's set can still arrive with the new day.
+    private val otetut = nakyma
+        .map { it.paiva }
         .distinctUntilChanged()
         .flatMapLatest { day -> repository.observeOtetut(day).map { day to it } }
 
     private val toggleError = MutableStateFlow(false)
 
     val uiState: StateFlow<EtusivuUiState> = combine(
-        now,
+        nakyma,
         repository.observeLaakkeet(),
         repository.observeMuistutukset(),
         otetut,
         toggleError
-    ) { current, laakkeet, muistutukset, (day, taken), toggleFailed ->
-        val paiva = current.toLocalDate()
-        val otetutTanaan = if (day == paiva) taken else emptySet()
+    ) { (current, week, paiva), laakkeet, muistutukset, (day, taken), toggleFailed ->
+        // Until the new day's set arrives, keep the previous state: with another day's set its
+        // doses would show as untaken for a moment.
+        if (day != paiva) return@combine null
+        val today = current.toLocalDate()
         EtusivuUiState(
+            tanaan = today,
+            nyt = current.toLocalTime().truncatedTo(ChronoUnit.MINUTES),
             paiva = paiva,
-            ryhmat = etusivunRyhmat(paiva, current, laakkeet, muistutukset, otetutTanaan),
+            viikko = week,
+            ryhmat = etusivunRyhmat(paiva, current, laakkeet, muistutukset, taken),
+            muokattavissa = canToggle(paiva, today),
             loading = false,
             toggleError = toggleFailed
         )
     }
+        .filterNotNull()
         // An error state instead of an ended collection.
         .catch { emit(EtusivuUiState(loading = false, loadError = true)) }
         .stateIn(
@@ -193,6 +234,15 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
 
     /** Today in the injected clock's zone. */
     fun today(): LocalDate = LocalDate.now(clock)
+
+    /**
+     * Shows [day], a day of this week from the strip. Picking today shows today again, so it
+     * follows midnight; another day is shown until the date changes.
+     */
+    fun selectDay(day: LocalDate) {
+        val today = today()
+        valittu.value = if (day == today) null else Valinta(day, today)
+    }
 
     /**
      * Ticks the dose of [rivi] if the user saw it untaken, otherwise unticks it, on the row's
@@ -220,6 +270,16 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
     fun toggleErrorShown() {
         toggleError.value = false
     }
+
+    /** A day picked in the strip ([paiva]) on [tanaan]. */
+    private data class Valinta(val paiva: LocalDate, val tanaan: LocalDate)
+
+    /** The current time, this week and the day shown. */
+    private data class Nakyma(
+        val current: ZonedDateTime,
+        val week: List<LocalDate>,
+        val paiva: LocalDate
+    )
 
     companion object {
         private const val MINUTE_MILLIS = 60_000L

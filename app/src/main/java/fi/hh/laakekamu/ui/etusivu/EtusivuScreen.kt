@@ -4,6 +4,7 @@ import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
@@ -30,11 +34,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -44,16 +50,23 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.domain.AnnoksenTila
 import fi.hh.laakekamu.ui.components.LkPrimaryButton
+import fi.hh.laakekamu.ui.format.formatDayMonth
 import fi.hh.laakekamu.ui.format.formatTime
+import fi.hh.laakekamu.ui.format.formatWeekday
+import fi.hh.laakekamu.ui.format.formatWeekdayShort
+import fi.hh.laakekamu.ui.format.formatWeekdayTitle
 import fi.hh.laakekamu.ui.theme.LkDanger
 import fi.hh.laakekamu.ui.theme.LkNavBar
 import fi.hh.laakekamu.ui.theme.LkPrimary
+import java.time.LocalDate
+import java.time.LocalTime
 
 // Figma: group heading 18sp with a 24dp sun/moon at x 34, rows with a 45dp checkbox at
 // x 31 and the text 18dp after it, 28dp between rows (the evening group), about 40dp between
@@ -73,12 +86,23 @@ private val MISSED_BORDER = 5.dp
 // Figma: the fi-rs-check icon sits 5.63dp from the frame's top left corner.
 private val CHECK_INSET = 5.63.dp
 
+// Figma (y minus the 24dp status bar Figma doesn't have): the week strip 45dp from the
+// top, 7 cells of 50dp at x 1 + 60 n with radius 20 when selected; the header 19dp under it;
+// the first time group 88dp under the header.
+private val TOP = 45.dp
+private val STRIP_EDGE = 1.dp
+private val DAY_CELL = 50.dp
+private val DAY_RADIUS = 20.dp
+private val STRIP_TO_HEADER = 19.dp
+private val HEADER_TO_LIST = 88.dp
+private val SIDE = 16.dp
+
 /**
- * Etusivu: today's doses grouped by time with sun/moon headings and their state; tapping
- * a row ticks or unticks it, and a tick that can't be saved is reported in
- * [snackbarHostState]. The week strip and header, the progress dots and the
- * permission banners come above and around this list. [onAdd] opens the wizard from the
- * empty state.
+ * Etusivu: this week's strip, the live header and the selected day's doses grouped by time
+ * with sun/moon headings and their state. Tapping a row ticks or unticks it, except
+ * on future days, and a tick that can't be saved is reported in [snackbarHostState]. The
+ * progress dots and the permission banners come later. [onAdd] opens the wizard from
+ * the empty state.
  */
 @Composable
 fun EtusivuScreen(
@@ -115,18 +139,111 @@ fun EtusivuScreen(
         modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(start = START, end = 16.dp, top = 24.dp, bottom = 24.dp)
+            .padding(top = TOP, bottom = 24.dp)
     ) {
+        val paiva = state.paiva
+        val tanaan = state.tanaan
+        val nyt = state.nyt
         when {
             state.loadError -> Message(stringResource(R.string.virhe_etusivu))
-            state.isEmpty -> EmptyState(onAdd)
-            else -> state.ryhmat.forEachIndexed { index, ryhma ->
-                if (index > 0) Spacer(Modifier.height(GROUP_GAP))
-                RyhmaOtsikko(ryhma)
-                ryhma.rivit.forEachIndexed { rowIndex, rivi ->
-                    Spacer(Modifier.height(if (rowIndex == 0) HEADING_TO_ROW else ROW_GAP))
-                    AnnosRow(rivi, onToggle = { viewModel.toggle(rivi) })
+            paiva == null || tanaan == null || nyt == null -> Unit // Loading.
+            else -> {
+                Viikko(state.viikko, paiva, tanaan, onSelect = viewModel::selectDay)
+                Spacer(Modifier.height(STRIP_TO_HEADER))
+                Otsikko(paiva, tanaan, nyt)
+                Spacer(Modifier.height(HEADER_TO_LIST))
+                if (state.isEmpty) {
+                    EmptyState(onAdd)
+                } else {
+                    Annokset(state.ryhmat, state.muokattavissa, onToggle = viewModel::toggle)
                 }
+            }
+        }
+    }
+}
+
+/**
+ * This week, Monday to Sunday ("to" over "18"), with [paiva] selected. A cell is a 50dp touch
+ * target, and TalkBack reads it as "torstai 18.12., tänään" with its selected state.
+ */
+@Composable
+private fun Viikko(
+    viikko: List<LocalDate>,
+    paiva: LocalDate,
+    tanaan: LocalDate,
+    onSelect: (LocalDate) -> Unit
+) {
+    // Figma: 20 Regular, two lines with line height 22.
+    val style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = STRIP_EDGE)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        viikko.forEach { day ->
+            val selected = day == paiva
+            val nimi =
+                stringResource(R.string.paiva_ja_pvm, formatWeekday(day), formatDayMonth(day))
+            val kuvaus = if (day == tanaan) stringResource(R.string.paiva_tanaan, nimi) else nimi
+            Box(
+                modifier = Modifier
+                    .width(DAY_CELL)
+                    .heightIn(min = DAY_CELL)
+                    .clip(RoundedCornerShape(DAY_RADIUS))
+                    .background(if (selected) LkPrimary else Color.Transparent)
+                    .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(day) })
+                    .semantics { contentDescription = kuvaus },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${formatWeekdayShort(day)}\n${day.dayOfMonth}",
+                    style = style,
+                    color = if (selected) Color.White else Color.Black,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.clearAndSetSemantics {}
+                )
+            }
+        }
+    }
+}
+
+/** "Tänään on torstai 18.12." / "klo 7.00" (live), or "Torstai 18.12." for another day. */
+@Composable
+private fun Otsikko(paiva: LocalDate, tanaan: LocalDate, nyt: LocalTime) {
+    val text = if (paiva == tanaan) {
+        val weekday = formatWeekday(paiva)
+        stringResource(R.string.tanaan_on, weekday, formatDayMonth(paiva), formatTime(nyt))
+    } else {
+        stringResource(R.string.paiva_ja_pvm, formatWeekdayTitle(paiva), formatDayMonth(paiva))
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Color.Black,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = SIDE)
+            .semantics { heading() }
+    )
+}
+
+/** The day's doses by time; rows can be ticked only when [muokattavissa]. */
+@Composable
+private fun Annokset(
+    ryhmat: List<AnnosRyhma>,
+    muokattavissa: Boolean,
+    onToggle: (AnnosRivi) -> Unit
+) {
+    Column(Modifier.padding(start = START, end = SIDE)) {
+        ryhmat.forEachIndexed { index, ryhma ->
+            if (index > 0) Spacer(Modifier.height(GROUP_GAP))
+            RyhmaOtsikko(ryhma)
+            ryhma.rivit.forEachIndexed { rowIndex, rivi ->
+                Spacer(Modifier.height(if (rowIndex == 0) HEADING_TO_ROW else ROW_GAP))
+                AnnosRow(rivi, enabled = muokattavissa, onToggle = { onToggle(rivi) })
             }
         }
     }
@@ -159,10 +276,10 @@ private fun RyhmaOtsikko(ryhma: AnnosRyhma) {
 /**
  * One dose: its checkbox, "name **dose**" and, when missed, "ottamatta". The whole row is
  * the checkbox: tapping it calls [onToggle], and TalkBack reads the state instead of
- * "checked".
+ * "checked". A future day's row isn't [enabled]: it looks the same but can't be tapped.
  */
 @Composable
-private fun AnnosRow(rivi: AnnosRivi, onToggle: () -> Unit) {
+private fun AnnosRow(rivi: AnnosRivi, enabled: Boolean, onToggle: () -> Unit) {
     val missed = rivi.tila == AnnoksenTila.OTTAMATTA
     val tila = when (rivi.tila) {
         AnnoksenTila.OTETTU -> stringResource(R.string.tila_otettu)
@@ -175,6 +292,7 @@ private fun AnnosRow(rivi: AnnosRivi, onToggle: () -> Unit) {
             .heightIn(min = ROW_MIN_HEIGHT)
             .toggleable(
                 value = rivi.tila == AnnoksenTila.OTETTU,
+                enabled = enabled,
                 role = Role.Checkbox,
                 onValueChange = { onToggle() }
             )
@@ -249,7 +367,7 @@ private fun Checkbox(tila: AnnoksenTila) {
 @Composable
 private fun EmptyState(onAdd: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 120.dp, end = START - 16.dp),
+        modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Message(stringResource(R.string.ei_laakkeita_paivalle))
@@ -264,6 +382,6 @@ private fun Message(text: String) {
         text = text,
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth().padding(horizontal = SIDE)
     )
 }
