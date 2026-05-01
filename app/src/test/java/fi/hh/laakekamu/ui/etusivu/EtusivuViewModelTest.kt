@@ -378,29 +378,48 @@ class EtusivuViewModelTest {
     }
 
     @Test
-    fun aFailedTick_isReportedOnce_andEachNewTapStartsWithoutIt() = runTest {
+    fun eachFailedTick_isANewMessage_andEachNewTapStartsWithoutIt() = runTest {
         val (repository, vm) = viewModelWith(muistutus(1, 1, 1200))
-        val errors = mutableListOf<Boolean>()
-        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            vm.uiState.collect { errors += it.toggleError }
-        }
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
         repository.failWrites = true
 
         vm.toggle(onlyRow(vm))
-        assertTrue(vm.uiState.value.toggleError)
+        val first = vm.uiState.value.toggleErrorId
+        assertTrue(first != 0L)
         assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
-        vm.toggleErrorShown()
-        assertFalse(vm.uiState.value.toggleError)
+        vm.toggleErrorShown(first)
+        assertEquals(0L, vm.uiState.value.toggleErrorId)
 
-        // A second failure is a new message even if the first wasn't shown yet.
+        // Two failures in a row are two messages, even within one frame,
+        // and a late "shown" for the older one doesn't hide the newer one.
         vm.toggle(onlyRow(vm))
+        val second = vm.uiState.value.toggleErrorId
         vm.toggle(onlyRow(vm))
-        assertEquals(listOf(true, false, true), errors.takeLast(3))
+        val third = vm.uiState.value.toggleErrorId
+        assertTrue(second != 0L && third != 0L && third != second)
+        vm.toggleErrorShown(second)
+        assertEquals(third, vm.uiState.value.toggleErrorId)
 
         repository.failWrites = false
         vm.toggle(onlyRow(vm))
-        assertFalse(vm.uiState.value.toggleError)
+        assertEquals(0L, vm.uiState.value.toggleErrorId)
         assertEquals(AnnoksenTila.OTETTU, onlyRow(vm).tila)
+    }
+
+    @Test
+    fun refresh_restartsTheClock_whenTheTickerSleptThroughTheTime() = runTest {
+        // The ticker's delay counts uptime, which stops while the phone sleeps.
+        val clock = MutableClock(now.plusSeconds(30).toInstant(), zone)
+        val (_, vm) = viewModelWith(clock, muistutus(1, 1, 630))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
+
+        clock.instant = now.plusHours(1).toInstant() // No virtual time has passed.
+        assertEquals(LocalTime.of(10, 0), vm.uiState.value.nyt)
+        vm.refresh()
+
+        assertEquals(LocalTime.of(11, 0), vm.uiState.value.nyt)
+        assertEquals(AnnoksenTila.OTTAMATTA, onlyRow(vm).tila)
     }
 
     /** A ViewModel at 10.00 today over one daily medication with [reminders]. */

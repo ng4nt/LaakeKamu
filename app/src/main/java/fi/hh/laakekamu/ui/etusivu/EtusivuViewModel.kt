@@ -27,6 +27,7 @@ import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +38,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -84,10 +86,11 @@ data class EtusivuUiState(
     /** The doses couldn't be read (e.g. database unavailable). */
     val loadError: Boolean = false,
     /**
-     * A tick or untick couldn't be saved. The screen shows it once as a snackbar and then calls
-     * [EtusivuViewModel.toggleErrorShown]; the next tap clears it too.
+     * Non-zero when a tick or untick couldn't be saved: a new id for each failure, so two
+     * failures in a row are two messages. The screen shows it once as a snackbar
+     * and then calls [EtusivuViewModel.toggleErrorShown]; the next tap clears it too.
      */
-    val toggleError: Boolean = false
+    val toggleErrorId: Long = 0L
 ) {
     val isEmpty: Boolean get() = !loading && !loadError && ryhmat.isEmpty()
 }
@@ -166,11 +169,18 @@ fun etusivunRyhmat(
 @OptIn(ExperimentalCoroutinesApi::class)
 class EtusivuViewModel(private val repository: AnnosRepository, private val clock: Clock) :
     ViewModel() {
-    private val now: Flow<ZonedDateTime> = flow {
-        while (true) {
-            val current = ZonedDateTime.now(clock)
-            emit(current)
-            delay(MINUTE_MILLIS - current.second * 1_000L - current.nano / 1_000_000L)
+    // Each refresh() restarts the ticker with a fresh time. Its delay counts uptime, which stops
+    // while the phone sleeps, so after a night with the screen off the old delay could still
+    // have most of a minute left.
+    private val refreshes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    private val now: Flow<ZonedDateTime> = refreshes.onStart { emit(Unit) }.flatMapLatest {
+        flow {
+            while (true) {
+                val current = ZonedDateTime.now(clock)
+                emit(current)
+                delay(MINUTE_MILLIS - current.second * 1_000L - current.nano / 1_000_000L)
+            }
         }
     }.shareIn(
         viewModelScope,
@@ -196,7 +206,8 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         .distinctUntilChanged()
         .flatMapLatest { day -> repository.observeOtetut(day).map { day to it } }
 
-    private val toggleError = MutableStateFlow(false)
+    private val toggleError = MutableStateFlow(0L)
+    private var failures = 0L
 
     val uiState: StateFlow<EtusivuUiState> = combine(
         nakyma,
@@ -204,7 +215,7 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         repository.observeMuistutukset(),
         otetut,
         toggleError
-    ) { (current, week, paiva), laakkeet, muistutukset, (day, taken), toggleFailed ->
+    ) { (current, week, paiva), laakkeet, muistutukset, (day, taken), errorId ->
         // Until the new day's set arrives, keep the previous state: with another day's set its
         // doses would show as untaken for a moment.
         if (day != paiva) return@combine null
@@ -217,7 +228,7 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
             ryhmat = etusivunRyhmat(paiva, current, laakkeet, muistutukset, taken),
             muokattavissa = canToggle(paiva, today),
             loading = false,
-            toggleError = toggleFailed
+            toggleErrorId = errorId
         )
     }
         .filterNotNull()
@@ -253,22 +264,30 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
     fun toggle(rivi: AnnosRivi) {
         if (!canToggle(rivi.paiva, today())) return
         val otettu = rivi.tila != AnnoksenTila.OTETTU
-        // A new tap starts without the old error, so a repeated failure is shown again.
-        toggleError.value = false
+        // A new tap starts without the old error; a failure gets a new id.
+        toggleError.value = 0L
         viewModelScope.launch {
             try {
                 repository.setOtettu(rivi.muistutusId, rivi.paiva, otettu)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                toggleError.value = true
+                toggleError.value = ++failures
             }
         }
     }
 
-    /** The screen has shown the [EtusivuUiState.toggleError] message. */
-    fun toggleErrorShown() {
-        toggleError.value = false
+    /**
+     * The screen has shown the message for [EtusivuUiState.toggleErrorId] [id]. A newer failure
+     * stays, so a late call for an older message can't hide it.
+     */
+    fun toggleErrorShown(id: Long) {
+        toggleError.compareAndSet(id, 0L)
+    }
+
+    /** Restarts the minute ticker with the current time; the screen calls this on every start. */
+    fun refresh() {
+        refreshes.tryEmit(Unit)
     }
 
     /** A day picked in the strip ([paiva]) on [tanaan]. */

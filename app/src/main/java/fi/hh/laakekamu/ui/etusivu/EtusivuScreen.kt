@@ -114,23 +114,26 @@ fun EtusivuScreen(
     val latest by viewModel.uiState.collectAsStateWithLifecycle()
     // The day the screen came to the foreground on. Coming back (also from a locked screen,
     // which keeps the composition) refreshes it, so a list kept from before midnight shows as
-    // loading until today's arrives.
+    // loading until today's arrives, and restarts the clock.
     var shownDay by remember { mutableStateOf(viewModel.today()) }
     LifecycleStartEffect(Unit) {
         shownDay = viewModel.today()
+        viewModel.refresh()
         onStopOrDispose {}
     }
     val state = shownState(latest, shownDay)
 
-    // Shown once; kept for the recreated screen if the activity is only rotating.
+    // Shown once per failure; kept for the recreated screen if the activity is only rotating
+    //.
     val virhe = stringResource(R.string.virhe_merkinta)
     val activity = LocalActivity.current
-    LaunchedEffect(state.toggleError) {
-        if (state.toggleError) {
+    val errorId = state.toggleErrorId
+    LaunchedEffect(errorId) {
+        if (errorId != 0L) {
             try {
                 snackbarHostState.showSnackbar(virhe, duration = SnackbarDuration.Long)
             } finally {
-                if (activity?.isChangingConfigurations != true) viewModel.toggleErrorShown()
+                if (activity?.isChangingConfigurations != true) viewModel.toggleErrorShown(errorId)
             }
         }
     }

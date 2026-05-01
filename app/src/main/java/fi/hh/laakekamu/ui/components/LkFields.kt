@@ -338,10 +338,11 @@ fun LkDateField(
                 // and still fit at large font sizes. The month-year menu button
                 // uses the button style (20 Bold), and M3's header row gives it its full width
                 // first: at 200 % font "marraskuu 2026" squeezed the next-month arrow to a
-                // sliver. So it stays 20sp up to 140 % font and then shrinks to 14sp at 200 %
-                // (the dialog's own buttons keep 20).
+                // sliver. So it's 20sp until that is 26dp on screen, and then 26dp: about 14sp at
+                // 200 % (toSp follows the nonlinear font scaling). The dialog's own
+                // buttons keep 20.
                 val typography = MaterialTheme.typography
-                val monthLabel = minOf(20f, 28f / LocalDensity.current.fontScale)
+                val monthLabel = with(LocalDensity.current) { minOf(20f, 26.dp.toSp().value) }
                 ProvideFinnishLocale {
                     MaterialTheme(
                         typography = typography.copy(
