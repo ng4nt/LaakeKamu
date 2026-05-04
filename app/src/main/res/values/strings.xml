@@ -77,6 +77,13 @@
     <string name="paiva_ja_pvm">%1$s %2$s</string>
     <!-- Week strip cell for TalkBack: "torstai 18.12., tänään" -->
     <string name="paiva_tanaan">%1$s, tänään</string>
+    <!-- Progress ("40%"; Finnish style with a no-break space). TalkBack reads the
+         whole progress as "Edistys 40 %: otettu 2, ottamatta 1, tulossa 2". -->
+    <string name="prosentti">%1$d %%</string>
+    <string name="edistys_kuvaus">Edistys %1$d %%: %2$s</string>
+    <string name="edistys_otettu">otettu %1$d</string>
+    <string name="edistys_ottamatta">ottamatta %1$d</string>
+    <string name="edistys_tulossa">tulossa %1$d</string>
 
     <!-- duration labels: wizard hint and medication list -->
     <string name="kesto_alkaa">alkaa %1$s</string>

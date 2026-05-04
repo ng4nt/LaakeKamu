@@ -45,8 +45,8 @@ private fun hasState(tila: String) =
     SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, tila)
 
 /**
- * Tapping a dose row ticks it (✓ and a Laakkeenotto row for today) and tapping
- * it again unticks it. The progress percentage part of comes with the progress.
+ * Tapping a dose row ticks it (✓, a Laakkeenotto row for today and the
+ * progress at 100 %) and tapping it again unticks it (back to 0 %).
  */
 @RunWith(AndroidJUnit4::class)
 class EtusivuScreenTest {
@@ -111,17 +111,23 @@ class EtusivuScreenTest {
         waitFor(doseRow)
         val row = compose.onNode(doseRow)
         row.assertIsOff().assert(hasState("tulossa"))
+        progress("Edistys 0 %: tulossa 1").assertIsDisplayed()
 
         row.performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(isOn()).fetchSemanticsNodes().size == 1 }
         row.assertIsOn().assert(hasState("otettu"))
+        progress("Edistys 100 %: otettu 1").assertIsDisplayed()
         assertEquals(setOf(reminder), takenToday())
 
         row.performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(isOn()).fetchSemanticsNodes().isEmpty() }
         row.assertIsOff().assert(hasState("tulossa"))
+        progress("Edistys 0 %: tulossa 1").assertIsDisplayed()
         assertEquals(emptySet<Long>(), takenToday())
     }
+
+    /** The progress (dots and %) is one TalkBack node with this description. */
+    private fun progress(kuvaus: String) = compose.onNodeWithContentDescription(kuvaus)
 
     /** the week strip shows another day; a future day's doses can't be ticked. */
     @Test

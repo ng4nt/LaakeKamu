@@ -139,6 +139,23 @@ class EtusivuViewModelTest {
     }
 
     @Test
+    fun theProgressDots_followTheListsOrder_byTimeThenName() {
+        val b = laake(1, "B")
+        val a = laake(2, "A")
+        val reminders = listOf(muistutus(1, 1, 1200), muistutus(2, 1, 480), muistutus(3, 2, 480))
+        val state = EtusivuUiState(
+            ryhmat = etusivunRyhmat(today, now, listOf(b, a), reminders, setOf(2L)),
+            loading = false
+        )
+
+        // 8.00 A (missed), 8.00 B (taken), 20.00 B (upcoming).
+        assertEquals(
+            listOf(AnnoksenTila.OTTAMATTA, AnnoksenTila.OTETTU, AnnoksenTila.TULOSSA),
+            state.tilat
+        )
+    }
+
+    @Test
     fun sunAndMoon_switchAt11And17() {
         assertEquals(Vuorokausi.AAMU, AnnosRyhma(10 * 60 + 59, emptyList()).vuorokausi)
         assertEquals(Vuorokausi.PAIVA, AnnosRyhma(11 * 60, emptyList()).vuorokausi)

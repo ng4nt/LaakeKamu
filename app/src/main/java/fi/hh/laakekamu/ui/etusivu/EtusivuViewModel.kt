@@ -93,6 +93,9 @@ data class EtusivuUiState(
     val toggleErrorId: Long = 0L
 ) {
     val isEmpty: Boolean get() = !loading && !loadError && ryhmat.isEmpty()
+
+    /** The doses' states in the list's order: the progress dots. */
+    val tilat: List<AnnoksenTila> get() = ryhmat.flatMap { ryhma -> ryhma.rivit.map { it.tila } }
 }
 
 /**

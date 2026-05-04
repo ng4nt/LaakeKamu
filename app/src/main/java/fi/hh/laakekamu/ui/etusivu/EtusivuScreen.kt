@@ -88,20 +88,23 @@ private val CHECK_INSET = 5.63.dp
 
 // Figma (y minus the 24dp status bar Figma doesn't have): the week strip 45dp from the
 // top, 7 cells of 50dp at x 1 + 60 n with radius 20 when selected; the header 19dp under it;
-// the first time group 88dp under the header.
+// the first time group 88dp under the header. Figma fills that gap with the progress:
+// its dots 25dp under the header and the time group 14dp under the % (20 + 7 + 22 between).
 private val TOP = 45.dp
 private val STRIP_EDGE = 1.dp
 private val DAY_CELL = 50.dp
 private val DAY_RADIUS = 20.dp
 private val STRIP_TO_HEADER = 19.dp
 private val HEADER_TO_LIST = 88.dp
+private val HEADER_TO_PROGRESS = 25.dp
+private val PROGRESS_TO_LIST = 14.dp
 private val SIDE = 16.dp
 
 /**
- * Etusivu: this week's strip, the live header and the selected day's doses grouped by time
- * with sun/moon headings and their state. Tapping a row ticks or unticks it, except
- * on future days, and a tick that can't be saved is reported in [snackbarHostState]. The
- * progress dots and the permission banners come later. [onAdd] opens the wizard from
+ * Etusivu: this week's strip, the live header, the selected day's progress and its doses
+ * grouped by time with sun/moon headings and their state. Tapping a row ticks or unticks it
+ *, except on future days, and a tick that can't be saved is reported in
+ * [snackbarHostState]. The permission banners come later. [onAdd] opens the wizard from
  * the empty state.
  */
 @Composable
@@ -154,10 +157,14 @@ fun EtusivuScreen(
                 Viikko(state.viikko, paiva, tanaan, onSelect = viewModel::selectDay)
                 Spacer(Modifier.height(STRIP_TO_HEADER))
                 Otsikko(paiva, tanaan, nyt)
-                Spacer(Modifier.height(HEADER_TO_LIST))
                 if (state.isEmpty) {
+                    // No doses, no progress.
+                    Spacer(Modifier.height(HEADER_TO_LIST))
                     EmptyState(onAdd)
                 } else {
+                    Spacer(Modifier.height(HEADER_TO_PROGRESS))
+                    Edistys(state.tilat)
+                    Spacer(Modifier.height(PROGRESS_TO_LIST))
                     Annokset(state.ryhmat, state.muokattavissa, onToggle = viewModel::toggle)
                 }
             }
