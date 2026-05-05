@@ -154,7 +154,7 @@ fun EtusivuScreen(
             state.loadError -> Message(stringResource(R.string.virhe_etusivu))
             paiva == null || tanaan == null || nyt == null -> Unit // Loading.
             else -> {
-                Viikko(state.viikko, paiva, tanaan, onSelect = viewModel::selectDay)
+                Viikko(state.viikko, paiva, tanaan, onSelect = { viewModel.selectDay(it, tanaan) })
                 Spacer(Modifier.height(STRIP_TO_HEADER))
                 Otsikko(paiva, tanaan, nyt)
                 if (state.isEmpty) {
@@ -174,7 +174,8 @@ fun EtusivuScreen(
 
 /**
  * This week, Monday to Sunday ("to" over "18"), with [paiva] selected. A cell is a 50dp touch
- * target, and TalkBack reads it as "torstai 18.12., tänään" with its selected state.
+ * target, and TalkBack reads it as "torstai 18.12., tänään" with its selected state. Under 352dp
+ * of width the cells share it equally instead of squeezing Sunday.
  */
 @Composable
 private fun Viikko(
@@ -199,6 +200,7 @@ private fun Viikko(
             val kuvaus = if (day == tanaan) stringResource(R.string.paiva_tanaan, nimi) else nimi
             Box(
                 modifier = Modifier
+                    .weight(1f, fill = false)
                     .width(DAY_CELL)
                     .heightIn(min = DAY_CELL)
                     .clip(RoundedCornerShape(DAY_RADIUS))

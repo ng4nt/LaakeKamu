@@ -235,7 +235,8 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         )
     }
         .filterNotNull()
-        // An error state instead of an ended collection.
+        // A failed query ends this flow with an error state, and nothing restarts it while the
+        // screen stays subscribed. The database error handling covers it.
         .catch { emit(EtusivuUiState(loading = false, loadError = true)) }
         .stateIn(
             viewModelScope,
@@ -250,12 +251,13 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
     fun today(): LocalDate = LocalDate.now(clock)
 
     /**
-     * Shows [day], a day of this week from the strip. Picking today shows today again, so it
-     * follows midnight; another day is shown until the date changes.
+     * Shows [day], picked in the strip built on [tanaan]. Picking today shows today again, so it
+     * follows midnight; another day is shown until the date changes. [tanaan] is the strip's day,
+     * not the clock's: a tap just after midnight (or a clock change) before the next tick picked
+     * from the old week, which the new day then replaces.
      */
-    fun selectDay(day: LocalDate) {
-        val today = today()
-        valittu.value = if (day == today) null else Valinta(day, today)
+    fun selectDay(day: LocalDate, tanaan: LocalDate) {
+        valittu.value = if (day == tanaan) null else Valinta(day, tanaan)
     }
 
     /**

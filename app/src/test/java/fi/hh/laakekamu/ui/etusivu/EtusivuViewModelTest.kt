@@ -289,7 +289,7 @@ class EtusivuViewModelTest {
         repository.otetut.value = mapOf(today to setOf(1L))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
 
-        vm.selectDay(yesterday)
+        vm.selectDay(yesterday, today)
 
         assertEquals(yesterday, vm.uiState.value.paiva)
         assertTrue(vm.uiState.value.muokattavissa)
@@ -304,7 +304,7 @@ class EtusivuViewModelTest {
         val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
 
-        vm.selectDay(today.plusDays(1))
+        vm.selectDay(today.plusDays(1), today)
 
         assertFalse(vm.uiState.value.muokattavissa)
         assertEquals(AnnoksenTila.TULOSSA, onlyRow(vm).tila)
@@ -321,8 +321,8 @@ class EtusivuViewModelTest {
             vm.uiState.toList(states)
         }
 
-        vm.selectDay(yesterday)
-        vm.selectDay(today)
+        vm.selectDay(yesterday, today)
+        vm.selectDay(today, today)
 
         val tilat = states.filter { !it.loading }
             .map { it.paiva to it.ryhmat.single().rivit.single().tila }
@@ -341,17 +341,37 @@ class EtusivuViewModelTest {
         val clock = MutableClock(today.atTime(23, 59).atZone(zone).toInstant(), zone)
         val (_, vm) = viewModelWith(clock, muistutus(1, 1, 480))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
-        vm.selectDay(yesterday)
+        vm.selectDay(yesterday, today)
 
         clock.instant = today.plusDays(1).atStartOfDay(zone).toInstant()
         advanceTimeBy(60_001)
         assertEquals(today.plusDays(1), vm.uiState.value.paiva)
 
         // Today, picked again, also follows the next midnight.
-        vm.selectDay(today.plusDays(1))
+        vm.selectDay(today.plusDays(1), today.plusDays(1))
         clock.instant = today.plusDays(2).atStartOfDay(zone).toInstant()
         advanceTimeBy(60_001)
         assertEquals(today.plusDays(2), vm.uiState.value.paiva)
+    }
+
+    @Test
+    fun aTapJustAfterMidnight_beforeTheTick_picksFromTheOldWeek_andTheNewDayWins() = runTest {
+        // Sunday 21.12. at 23.59; the user taps Sunday (today on the strip), and
+        // the tap runs at 00.00.00,5 Monday, before the ticker has noticed midnight.
+        val sunday = LocalDate.of(2025, 12, 21)
+        val monday = sunday.plusDays(1)
+        val clock = MutableClock(sunday.atTime(23, 59).atZone(zone).toInstant(), zone)
+        val (_, vm) = viewModelWith(clock, muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        val strip = vm.uiState.value
+        assertEquals(sunday, strip.tanaan)
+
+        clock.instant = monday.atStartOfDay(zone).toInstant().plusMillis(500)
+        vm.selectDay(sunday, strip.tanaan!!)
+        advanceTimeBy(60_001)
+
+        assertEquals(monday, vm.uiState.value.paiva)
+        assertEquals(viikko(monday), vm.uiState.value.viikko)
     }
 
     // Ticking
