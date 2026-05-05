@@ -68,6 +68,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
+    // The database file is encrypted. SQLCipher's README asks for androidx.sqlite to be
+    // declared; 2.6.2 is the version Room 2.8.5 already uses.
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.sqlite)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)

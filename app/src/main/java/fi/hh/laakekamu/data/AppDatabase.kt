@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import fi.hh.laakekamu.data.dao.LaakeDao
 import fi.hh.laakekamu.data.dao.LaakkeenottoDao
 import fi.hh.laakekamu.data.dao.MuistutusDao
@@ -51,9 +52,16 @@ abstract class AppDatabase : RoomDatabase() {
         /** File name in the app's databases/ folder (used by /lk-adb dbcheck). */
         const val NAME = "laakekamu.db"
 
-        /** Builds the on-device database. Room opens it lazily on the first query. */
-        fun build(context: Context): AppDatabase =
+        /**
+         * Builds the on-device database on [openHelperFactory] (SQLCipher's). Room opens it
+         * lazily on the first query.
+         */
+        fun build(
+            context: Context,
+            openHelperFactory: SupportSQLiteOpenHelper.Factory
+        ): AppDatabase =
             Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)
+                .openHelperFactory(openHelperFactory)
                 .addCallback(SeedCallback)
                 .build()
     }
