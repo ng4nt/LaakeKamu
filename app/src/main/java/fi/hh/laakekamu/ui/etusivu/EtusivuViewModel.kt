@@ -195,10 +195,13 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
     /** The day picked in the strip and the day it was picked on; null shows today. */
     private val valittu = MutableStateFlow<Valinta?>(null)
 
-    // "Now" and the day shown. A day picked on an earlier day gives way to today, so a new day
-    // (and maybe a new week) starts on today.
+    // "Now" and the day shown. A day picked on another day gives way to today, so a new day
+    // (and maybe a new week) starts on today. The pick is also cleared: after a clock moved back
+    // over midnight (a westward zone change) it would come back when its day came round again
+    //.
     private val nakyma = combine(now, valittu) { current, picked ->
         val today = current.toLocalDate()
+        if (picked != null && picked.tanaan != today) valittu.compareAndSet(picked, null)
         Nakyma(current, viikko(today), picked?.takeIf { it.tanaan == today }?.paiva ?: today)
     }
 

@@ -68,8 +68,9 @@ private val DOTS_TO_PERCENT = 7.dp
 /**
  * The day's progress: a dot per dose in the list's order, or a bar for more than
  * [MAX_DOTS], with the taken percentage under it. TalkBack reads it as one line, e.g.
- * "Edistys 40 %: 2 otettu, 1 ottamatta, 2 tulossa". The missed state isn't colour alone
- *: its dot is a ring, and its row says "ottamatta".
+ * "Edistys 40 %: otettu 2, ottamatta 1, tulossa 2". The dots tell missed from upcoming by
+ * colour only (both are rings), so the missed state isn't colour alone through its row,
+ * which has "!" and says "ottamatta".
  */
 @Composable
 fun Edistys(tilat: List<AnnoksenTila>, modifier: Modifier = Modifier) {

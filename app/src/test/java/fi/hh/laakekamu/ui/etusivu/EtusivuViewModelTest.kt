@@ -355,6 +355,26 @@ class EtusivuViewModelTest {
     }
 
     @Test
+    fun aPickThatGaveWay_staysGone_whenTheClockMovesBackAndReachesItsDayAgain() = runTest {
+        // Tomorrow picked today at 10.00; the clock then moves back to yesterday
+        // 23.59 (a westward zone change) and passes midnight into today again.
+        val clock = MutableClock(now.toInstant(), zone)
+        val (_, vm) = viewModelWith(clock, muistutus(1, 1, 480))
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        vm.selectDay(today.plusDays(1), today)
+        assertEquals(today.plusDays(1), vm.uiState.value.paiva)
+
+        clock.instant = yesterday.atTime(23, 59).atZone(zone).toInstant()
+        advanceTimeBy(60_001)
+        assertEquals(yesterday, vm.uiState.value.paiva)
+
+        clock.instant = today.atStartOfDay(zone).toInstant()
+        advanceTimeBy(60_001)
+        assertEquals(today, vm.uiState.value.tanaan)
+        assertEquals(today, vm.uiState.value.paiva)
+    }
+
+    @Test
     fun aTapJustAfterMidnight_beforeTheTick_picksFromTheOldWeek_andTheNewDayWins() = runTest {
         // Sunday 21.12. at 23.59; the user taps Sunday (today on the strip), and
         // the tap runs at 00.00.00,5 Monday, before the ticker has noticed midnight.

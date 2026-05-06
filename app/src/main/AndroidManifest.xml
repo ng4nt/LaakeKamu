@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- No INTERNET permission: health data never leaves the device. -->
+    <!-- supportsRtl="false": the UI is Finnish only, so it stays left to right on a phone set to
+         an RTL language; otherwise the rows mirror, the progress Canvas doesn't, and the bidi
+         rules move "?" and "!" to the start of the texts. -->
     <application
         android:name=".LaakeKamuApp"
         android:allowBackup="false"
@@ -11,7 +14,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:supportsRtl="true"
+        android:supportsRtl="false"
         android:theme="@style/Theme.LaakeKamu">
         <activity
             android:name=".MainActivity"
