@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -189,13 +190,27 @@ class EtusivuViewModelTest {
         assertTrue(empty.uiState.value.isEmpty)
 
         val failing = EtusivuViewModel(
-            FakeAnnosRepository(fail = true),
+            FakeAnnosRepository().apply { failReads = true },
             Clock.fixed(now.toInstant(), zone)
         )
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             failing.uiState.collect {}
         }
         assertTrue(failing.uiState.value.loadError)
+    }
+
+    @Test
+    fun aFailedQuery_showsTheError_andTheNextStartOfTheScreenReadsAgain() = runTest {
+        // The error used to end the state flow, so Home stayed on it.
+        val (repository, vm) = viewModelWith(muistutus(1, 1, 480))
+        repository.failReads = true
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.uiState.collect {} }
+        assertTrue(vm.uiState.value.loadError)
+
+        repository.failReads = false
+        vm.refresh()
+        assertFalse(vm.uiState.value.loadError)
+        assertEquals("A", onlyRow(vm).nimi)
     }
 
     @Test
@@ -540,14 +555,15 @@ private class MutableClock(var instant: Instant, private val zone: ZoneId) : Clo
 private data class Write(val muistutusId: Long, val paiva: LocalDate, val otettu: Boolean)
 
 /**
- * In-memory [AnnosRepository]; [fail] makes the medication query fail and [failWrites] the
- * ticks. Saved ticks are recorded in [writes].
+ * In-memory [AnnosRepository]; [failReads] makes the medication query fail when it starts and
+ * [failWrites] the ticks. Saved ticks are recorded in [writes].
  */
-private class FakeAnnosRepository(private val fail: Boolean = false) : AnnosRepository {
+private class FakeAnnosRepository : AnnosRepository {
     val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
     val muistutukset = MutableStateFlow<List<Muistutus>>(emptyList())
     val otetut = MutableStateFlow<Map<LocalDate, Set<Long>>>(emptyMap())
     val writes = mutableListOf<Write>()
+    var failReads = false
     var failWrites = false
 
     override suspend fun setOtettu(muistutusId: Long, paiva: LocalDate, otettu: Boolean) {
@@ -559,10 +575,9 @@ private class FakeAnnosRepository(private val fail: Boolean = false) : AnnosRepo
         }
     }
 
-    override fun observeLaakkeet(): Flow<List<Laake>> = if (fail) {
-        flow { throw IllegalStateException("database unavailable") }
-    } else {
-        laakkeet
+    override fun observeLaakkeet(): Flow<List<Laake>> = flow {
+        if (failReads) throw IllegalStateException("database unavailable")
+        emitAll(laakkeet)
     }
 
     override fun observeMuistutukset(): Flow<List<Muistutus>> = muistutukset

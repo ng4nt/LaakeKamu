@@ -31,14 +31,15 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -238,9 +239,14 @@ class EtusivuViewModel(private val repository: AnnosRepository, private val cloc
         )
     }
         .filterNotNull()
-        // A failed query ends this flow with an error state, and nothing restarts it while the
-        // screen stays subscribed. The database error handling covers it.
-        .catch { emit(EtusivuUiState(loading = false, loadError = true)) }
+        // A failed query shows the error, waits for the screen's next start (refresh()) and
+        // then reads again. A catch would end the flow, and nothing would restart it while the
+        // screen stays subscribed.
+        .retryWhen { _, _ ->
+            emit(EtusivuUiState(loading = false, loadError = true))
+            refreshes.first()
+            true
+        }
         .stateIn(
             viewModelScope,
             // The last state stays cached during a pause, so a list from the same day is shown at
