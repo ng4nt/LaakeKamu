@@ -53,14 +53,15 @@ abstract class AppDatabase : RoomDatabase() {
         const val NAME = "laakekamu.db"
 
         /**
-         * Builds the on-device database on [openHelperFactory] (SQLCipher's). Room opens it
-         * lazily on the first query.
+         * Builds the on-device database [name] on [openHelperFactory] (SQLCipher's). Room
+         * opens it lazily on the first query.
          */
         fun build(
             context: Context,
-            openHelperFactory: SupportSQLiteOpenHelper.Factory
+            openHelperFactory: SupportSQLiteOpenHelper.Factory,
+            name: String = NAME
         ): AppDatabase =
-            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, NAME)
+            Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, name)
                 .openHelperFactory(openHelperFactory)
                 .addCallback(SeedCallback)
                 .build()

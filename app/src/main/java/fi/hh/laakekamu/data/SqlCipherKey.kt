@@ -53,8 +53,33 @@ class SqlCipherKey(
             .putString(WRAPPED, encode(cipher.doFinal(key)))
             .putString(IV, encode(cipher.iv))
             .commit()
-        check(saved) { "The database key couldn't be saved" }
+        if (!saved) {
+            // commit() changes the in-memory prefs even when the disk write fails; without this
+            // the next call in this process would use a key that isn't on disk.
+            prefs.edit().remove(WRAPPED).remove(IV).apply()
+            throw IllegalStateException("The database key couldn't be saved")
+        }
         return key
+    }
+
+    /** True if a wrapped key is saved; it may still fail to unwrap. */
+    fun isSaved(): Boolean = prefs.contains(WRAPPED) && prefs.contains(IV)
+
+    /**
+     * Deletes the saved key and its Keystore key, for "Aloita alusta" after the user has
+     * confirmed it. A database encrypted with the key can't be opened again.
+     */
+    fun delete() {
+        check(prefs.edit().clear().commit()) { "The database key couldn't be deleted" }
+        deleteKeystoreKey()
+    }
+
+    /**
+     * Deletes only the Keystore key, so the saved key can't be unwrapped any more: the debug
+     * "simulate key loss" action.
+     */
+    fun deleteKeystoreKey() {
+        keyStore().deleteEntry(alias)
     }
 
     /** The Keystore key to wrap a new database key with: the existing one, or a new one. */

@@ -48,7 +48,7 @@ object SqlCipherSetup {
      * temporary file that the next run removes. Room must not have the file open.
      */
     fun encryptPlaintext(file: File, passphrase: ByteArray) {
-        val encrypted = File(file.path + ".encrypting")
+        val encrypted = temporaryFile(file)
         deleteWithCompanions(encrypted)
         // CREATE_IF_NECESSARY: an attached database gets the main one's open flags, and ATTACH
         // must create the new file. execSQL and cursors, not rawExecSQL: on the device,
@@ -68,6 +68,13 @@ object SqlCipherSetup {
         check(encrypted.renameTo(file)) { "Couldn't replace the plaintext database" }
         Log.i(TAG, "Encrypted the plaintext database (schema version kept)")
     }
+
+    /** Deletes the temporary file an interrupted [encryptPlaintext] of [file] may have left. */
+    fun deleteLeftovers(file: File) {
+        deleteWithCompanions(temporaryFile(file))
+    }
+
+    private fun temporaryFile(file: File) = File(file.path + ".encrypting")
 
     private fun companions(file: File): List<File> =
         listOf("-wal", "-shm", "-journal").map { File(file.path + it) }
