@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import fi.hh.laakekamu.ui.LaakeKamuRoot
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
+import fi.hh.laakekamu.ui.tietokanta.TietokantaPortti
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,7 +21,9 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             LaakeKamuTheme {
-                LaakeKamuRoot()
+                TietokantaPortti {
+                    LaakeKamuRoot()
+                }
             }
         }
     }

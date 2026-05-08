@@ -90,4 +90,12 @@
     <string name="kesto_jaljella">vielä %1$d pv</string>
     <string name="kesto_paattynyt">päättynyt</string>
     <string name="kesto_kaytossa">Käytössä %1$d pv</string>
+
+    <!-- Database can't be opened: error screen and the start-over confirmation -->
+    <string name="tietokanta_virhe_otsikko">Tietoja ei voitu avata</string>
+    <string name="tietokanta_virhe_teksti">Lääkkeitäsi ja merkintöjäsi ei voitu avata. Tietoja ei ole poistettu. Yritä uudelleen. Jos se ei auta, voit aloittaa alusta.</string>
+    <string name="yrita_uudelleen">Yritä uudelleen</string>
+    <string name="aloita_alusta">Aloita alusta</string>
+    <string name="aloita_alusta_otsikko">Aloitetaanko alusta?</string>
+    <string name="aloita_alusta_teksti">Kaikki lääkkeet, niiden historia ja oirepäiväkirja poistetaan pysyvästi. Tätä ei voi perua.</string>
 </resources>
