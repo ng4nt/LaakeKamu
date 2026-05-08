@@ -302,7 +302,14 @@ class LisaaLaakeViewModel(
                 handle[KEY_SAVED] = true
                 saveState.value = SaveState()
             } catch (e: IllegalArgumentException) {
-                val nameError = repository.nameError(laake.nimi)
+                // A failed re-check (e.g. the database lost meanwhile) shows the save error.
+                val nameError = try {
+                    repository.nameError(laake.nimi)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
                 if (nameError != null) {
                     errors.value = Step1Errors(nimi = nameError)
                     handle[KEY_STEP] = 1

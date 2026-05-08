@@ -426,6 +426,26 @@ class LisaaLaakeViewModelTest {
         assertEquals(listOf<Int?>(480, 1200), state.ajat)
     }
 
+    @Test
+    fun aRejectedSave_whoseNameRecheckFailsToo_showsTheSaveError() = runTest {
+        // The name is checked again after a rejected save; if that read fails as well, the
+        // save error is shown instead of the exception escaping the save.
+        val repository = FakeLaakeRepository()
+        val vm = viewModel(repo = repository).also { collect(it) }
+        fillValid(vm)
+        vm.onNext()
+        fillStep2(vm)
+        repository.addRejects = true
+        repository.nameErrorFails = true
+
+        vm.onDone()
+
+        val state = vm.uiState.value
+        assertTrue(state.saveError)
+        assertFalse(state.saved || state.saving)
+        assertEquals(2, state.step)
+    }
+
     private fun fillStep2(vm: LisaaLaakeViewModel) {
         vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)
         vm.onAikaChange(0, 480)

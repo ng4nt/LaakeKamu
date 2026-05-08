@@ -30,6 +30,12 @@ class FakeLaakeRepository(
     /** When set, [nameError] waits for it, so a test can act while the name is checked. */
     var nameErrorGate: CompletableDeferred<Unit>? = null
 
+    /** When set, [add] rejects the medication with an IllegalArgumentException. */
+    var addRejects = false
+
+    /** When set, [nameError] fails, as when the database is lost between two calls. */
+    var nameErrorFails = false
+
     override fun observeTyypit(): Flow<List<Tyyppi>> = if (failChoices) {
         flow { throw IllegalStateException("database unavailable") }
     } else {
@@ -50,6 +56,7 @@ class FakeLaakeRepository(
 
     override suspend fun nameError(name: String, editedId: Long?): NameError? {
         nameErrorGate?.await()
+        check(!nameErrorFails) { "database unavailable" }
         return nameErrorFor(name, editedId)
     }
 
@@ -63,6 +70,7 @@ class FakeLaakeRepository(
 
     override suspend fun add(laake: Laake, times: List<Int>): Long {
         check(!failAdd) { "database unavailable" }
+        require(!addRejects) { "Invalid medication" }
         // Like the real repository: is checked again inside the save.
         nameErrorFor(laake.nimi, null)?.let { throw IllegalArgumentException("Invalid name: $it") }
         val id = (laakkeet.value.maxOfOrNull { it.laakeId } ?: 0) + 1
