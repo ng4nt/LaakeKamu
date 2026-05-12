@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- No INTERNET permission: health data never leaves the device. -->
+    <!-- Dose reminders (Android 13+ asks the user). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- supportsRtl="false": the UI is Finnish only, so it stays left to right on a phone set to
          an RTL language; otherwise the rows mirror, the progress Canvas doesn't, and the bidi
          rules move "?" and "!" to the start of the texts. -->

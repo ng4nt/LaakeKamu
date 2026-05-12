@@ -98,4 +98,7 @@
     <string name="aloita_alusta">Aloita alusta</string>
     <string name="aloita_alusta_otsikko">Aloitetaanko alusta?</string>
     <string name="aloita_alusta_teksti">Kaikki lääkkeet, niiden historia ja oirepäiväkirja poistetaan pysyvästi. Tätä ei voi perua.</string>
+
+    <!-- Reminders -->
+    <string name="kanava_muistutukset">Lääkemuistutukset</string>
 </resources>

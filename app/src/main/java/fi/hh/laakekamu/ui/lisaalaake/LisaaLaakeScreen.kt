@@ -1,6 +1,9 @@
 package fi.hh.laakekamu.ui.lisaalaake
 
+import android.Manifest
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts.RequestPermission
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -27,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -38,6 +42,7 @@ import fi.hh.laakekamu.R
 import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.NAME_MAX_LENGTH
 import fi.hh.laakekamu.domain.NameError
+import fi.hh.laakekamu.reminders.Ilmoitukset
 import fi.hh.laakekamu.ui.components.LkBackButton
 import fi.hh.laakekamu.ui.components.LkDateField
 import fi.hh.laakekamu.ui.components.LkDropdown
@@ -75,8 +80,21 @@ fun LisaaLaakeScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     // System back on step 2 returns to step 1 with the values kept.
     BackHandler(enabled = state.step == 2) { viewModel.onBackToStep1() }
+    // A daily medication is reminded, so its save asks for notifications if they aren't allowed
+    // yet. The answer isn't awaited: the dialog stays over the list, and Home's
+    // banner reads the result on its own.
+    val context = LocalContext.current
+    val askNotifications = rememberLauncherForActivityResult(RequestPermission()) {}
     // Leave once saved, also when the process was restored after the save.
-    LaunchedEffect(state.saved) { if (state.saved) onSaved() }
+    LaunchedEffect(state.saved) {
+        if (state.saved) {
+            val daily = state.kuinkaUsein == KuinkaUsein.PAIVITTAIN
+            if (daily && Ilmoitukset.tarvitseeLuvan(context)) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            onSaved()
+        }
+    }
 
     val content = Modifier
         .fillMaxSize()

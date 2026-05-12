@@ -3,10 +3,11 @@ package fi.hh.laakekamu
 import android.app.Application
 import android.os.StrictMode
 import fi.hh.laakekamu.data.AppContainer
+import fi.hh.laakekamu.reminders.Ilmoitukset
 
 /**
- * Application class. It only creates the [AppContainer]; nothing database-, Keystore- or
- * prefs-related runs on the main thread here.
+ * Application class. It creates the [AppContainer] and the reminder channel; nothing
+ * database-, Keystore- or prefs-related runs on the main thread here.
  */
 class LaakeKamuApp : Application() {
     lateinit var container: AppContainer
@@ -18,6 +19,7 @@ class LaakeKamuApp : Application() {
             enableStrictMode()
         }
         container = AppContainer(this)
+        Ilmoitukset.luoKanava(this)
     }
 
     /** Debug builds log disk access on the main thread and leaked closeables. */
