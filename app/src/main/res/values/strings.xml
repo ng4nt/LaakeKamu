@@ -101,4 +101,6 @@
 
     <!-- Reminders -->
     <string name="kanava_muistutukset">Lääkemuistutukset</string>
+    <string name="muistutukset_pois">Muistutukset ovat pois päältä</string>
+    <string name="salli_ilmoitukset">Salli ilmoitukset</string>
 </resources>

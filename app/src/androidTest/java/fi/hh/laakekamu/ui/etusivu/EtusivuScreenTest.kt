@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -102,8 +103,15 @@ class EtusivuScreenTest {
         db.close()
     }
 
-    /** Shows Etusivu in [modifier], under [lifecycleOwner] when given (else the activity's). */
-    private fun show(modifier: Modifier = Modifier, lifecycleOwner: LifecycleOwner? = null) {
+    /**
+     * Shows Etusivu in [modifier], under [lifecycleOwner] when given (else the activity's), with
+     * notifications allowed unless [ilmoitukset] is false (the device's own setting varies).
+     */
+    private fun show(
+        modifier: Modifier = Modifier,
+        lifecycleOwner: LifecycleOwner? = null,
+        ilmoitukset: Boolean = true
+    ) {
         val viewModel = EtusivuViewModel(RoomAnnosRepository({ db }, clock), clock)
         compose.setContent {
             LaakeKamuTheme {
@@ -114,7 +122,8 @@ class EtusivuScreenTest {
                         onAdd = {},
                         snackbarHostState = remember { SnackbarHostState() },
                         modifier = modifier,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        ilmoituksetSallittu = ilmoitukset
                     )
                 }
             }
@@ -179,6 +188,22 @@ class EtusivuScreenTest {
         // 318dp of strip (1dp edges) / 7 cells = 45.4dp each; before Sunday got 18dp.
         compose.onNodeWithContentDescription("sunnuntai 21.12.").assertWidthIsAtLeast(45.dp)
         compose.onNodeWithContentDescription("maanantai 15.12.").assertWidthIsAtLeast(45.dp)
+    }
+
+    /** notifications off → the banner and its button, above the week strip. */
+    @Test
+    fun notificationsOff_showsTheBanner() {
+        show(ilmoitukset = false)
+        waitFor(doseRow)
+        compose.onNodeWithText("Muistutukset ovat pois päältä").assertIsDisplayed()
+        compose.onNodeWithText("Salli ilmoitukset").assertIsDisplayed().assertHasClickAction()
+    }
+
+    @Test
+    fun notificationsOn_showsNoBanner() {
+        show()
+        waitFor(doseRow)
+        compose.onNodeWithText("Muistutukset ovat pois päältä").assertDoesNotExist()
     }
 
     /**

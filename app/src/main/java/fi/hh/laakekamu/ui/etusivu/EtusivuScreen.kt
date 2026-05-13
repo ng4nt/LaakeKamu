@@ -104,15 +104,16 @@ private val SIDE = 16.dp
  * Etusivu: this week's strip, the live header, the selected day's progress and its doses
  * grouped by time with sun/moon headings and their state. Tapping a row ticks or unticks it
  *, except on future days, and a tick that can't be saved is reported in
- * [snackbarHostState]. The permission banners come later. [onAdd] opens the wizard from
- * the empty state.
+ * [snackbarHostState]. Above it all, a banner says when reminders can't be shown
+ * ([ilmoituksetSallittu] is false). [onAdd] opens the wizard from the empty state.
  */
 @Composable
 fun EtusivuScreen(
     onAdd: () -> Unit,
     snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
-    viewModel: EtusivuViewModel = viewModel(factory = EtusivuViewModel.Factory)
+    viewModel: EtusivuViewModel = viewModel(factory = EtusivuViewModel.Factory),
+    ilmoituksetSallittu: Boolean = rememberIlmoituksetSallittu()
 ) {
     val latest by viewModel.uiState.collectAsStateWithLifecycle()
     // The day the screen came to the foreground on. Coming back (also from a locked screen,
@@ -145,8 +146,15 @@ fun EtusivuScreen(
         modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(top = TOP, bottom = 24.dp)
+            .padding(bottom = 24.dp)
     ) {
+        if (ilmoituksetSallittu) {
+            Spacer(Modifier.height(TOP))
+        } else {
+            Spacer(Modifier.height(SIDE))
+            IlmoitusBanneri()
+            Spacer(Modifier.height(SIDE))
+        }
         val paiva = state.paiva
         val tanaan = state.tanaan
         val nyt = state.nyt
