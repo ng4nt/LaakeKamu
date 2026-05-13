@@ -52,16 +52,25 @@ class AppContainer(
     }
 
     /**
-     * "Aloita alusta", only after the user has confirmed it: deletes the database files, the saved key and its Keystore key, then opens a
-     * new database with only the seeds.
+     * "Aloita alusta", only after the user has confirmed it: deletes the saved key and its Keystore key, then the database files, then
+     * opens a new database with only the seeds. The key goes first: if the process dies in
+     * between, the file is left without its key and the error screen offers the start-over
+     * again, instead of a missing file with a key that no longer unwraps.
      */
     suspend fun startOver(): AppDatabase = databaseMutex.withLock {
-        withContext(ioDispatcher) {
-            database?.close()
-            database = null
-            appContext.deleteDatabase(databaseName)
-            SqlCipherSetup.deleteLeftovers(appContext.getDatabasePath(databaseName))
-            key().delete()
+        try {
+            withContext(ioDispatcher) {
+                database?.close()
+                database = null
+                key().delete()
+                appContext.deleteDatabase(databaseName)
+                SqlCipherSetup.deleteLeftovers(appContext.getDatabasePath(databaseName))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Starting over failed before the new database was made", e)
+            throw e
         }
         Log.i(TAG, "Started over with an empty database, as the user confirmed")
         open().also { database = it }
@@ -79,7 +88,7 @@ class AppContainer(
 
     private fun unavailable(cause: Throwable): Nothing {
         Log.e(TAG, "The database can't be opened", cause)
-        tila.value = TietokannanTila.EI_SAATAVILLA
+        tila.value = tilaKunAvausEpaonnistui(cause)
         throw TietokantaEiSaatavillaException(cause)
     }
 

@@ -93,6 +93,8 @@
 
     <!-- Database can't be opened: error screen and the start-over confirmation -->
     <string name="tietokanta_virhe_otsikko">Tietoja ei voitu avata</string>
+    <!-- the open failed for a reason a start-over can't fix (e.g. full storage) -->
+    <string name="tietokanta_virhe_tilapainen">Lääkkeitäsi ja merkintöjäsi ei voitu nyt avata. Tietoja ei ole poistettu. Tarkista, että puhelimessa on vapaata tallennustilaa, ja yritä uudelleen.</string>
     <string name="tietokanta_virhe_teksti">Lääkkeitäsi ja merkintöjäsi ei voitu avata. Tietoja ei ole poistettu. Yritä uudelleen. Jos se ei auta, voit aloittaa alusta.</string>
     <string name="yrita_uudelleen">Yritä uudelleen</string>
     <string name="aloita_alusta">Aloita alusta</string>

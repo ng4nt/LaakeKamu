@@ -56,7 +56,8 @@ fun TietokantaPortti(
     when (tila) {
         TietokannanTila.AVAAMATTA -> Surface(Modifier.fillMaxSize()) {}
         TietokannanTila.AUKI -> content()
-        TietokannanTila.EI_SAATAVILLA -> TietokantaVirheScreen(
+        TietokannanTila.EI_SAATAVILLA, TietokannanTila.AVAUS_EPAONNISTUI -> TietokantaVirheScreen(
+            voiAloittaaAlusta = tila == TietokannanTila.EI_SAATAVILLA,
             enabled = !kaynnissa,
             onRetry = viewModel::yritaUudelleen,
             onStartOver = viewModel::aloitaAlusta
@@ -67,10 +68,12 @@ fun TietokantaPortti(
 /**
  * "Tietoja ei voitu avata": retry, or start over after a confirmation
  * that says everything will be deleted. [onStartOver] runs only from the dialog's confirm
- * button, never straight from the screen.
+ * button, never straight from the screen. Without
+ * [voiAloittaaAlusta] (the data is probably fine) only the retry is offered.
  */
 @Composable
 fun TietokantaVirheScreen(
+    voiAloittaaAlusta: Boolean,
     enabled: Boolean,
     onRetry: () -> Unit,
     onStartOver: () -> Unit,
@@ -95,7 +98,13 @@ fun TietokantaVirheScreen(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = stringResource(R.string.tietokanta_virhe_teksti),
+                text = stringResource(
+                    if (voiAloittaaAlusta) {
+                        R.string.tietokanta_virhe_teksti
+                    } else {
+                        R.string.tietokanta_virhe_tilapainen
+                    }
+                ),
                 modifier = Modifier.widthIn(max = BUTTON_WIDTH).fillMaxWidth(),
                 style = MaterialTheme.typography.bodyLarge
             )
@@ -105,14 +114,17 @@ fun TietokantaVirheScreen(
                 onClick = onRetry,
                 enabled = enabled
             )
-            LkDangerButton(
-                text = stringResource(R.string.aloita_alusta),
-                onClick = { confirming = true },
-                enabled = enabled
-            )
+            if (voiAloittaaAlusta) {
+                LkDangerButton(
+                    text = stringResource(R.string.aloita_alusta),
+                    onClick = { confirming = true },
+                    enabled = enabled
+                )
+            }
         }
     }
-    if (confirming) {
+    // A retry may turn the state into one start-over can't fix: the dialog goes then too.
+    if (confirming && voiAloittaaAlusta) {
         AlertDialog(
             onDismissRequest = { confirming = false },
             title = {
@@ -152,6 +164,11 @@ private val BUTTON_WIDTH = 310.dp
 @Composable
 private fun TietokantaVirheScreenPreview() {
     LaakeKamuTheme {
-        TietokantaVirheScreen(enabled = true, onRetry = {}, onStartOver = {})
+        TietokantaVirheScreen(
+            voiAloittaaAlusta = true,
+            enabled = true,
+            onRetry = {},
+            onStartOver = {}
+        )
     }
 }

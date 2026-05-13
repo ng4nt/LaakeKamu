@@ -26,6 +26,7 @@ class TietokantaVirheScreenTest {
         compose.setContent {
             LaakeKamuTheme {
                 TietokantaVirheScreen(
+                    voiAloittaaAlusta = true,
                     enabled = true,
                     onRetry = { retries++ },
                     onStartOver = { startOvers++ }
@@ -47,5 +48,23 @@ class TietokantaVirheScreenTest {
         compose.onNodeWithText("Aloitetaanko alusta?").assertDoesNotExist()
         assertEquals(1, startOvers)
         assertEquals(1, retries)
+    }
+
+    /** When the data is probably fine (e.g. full storage) only the retry is shown. */
+    @Test
+    fun withoutStartOver_onlyTheRetryIsOffered() {
+        compose.setContent {
+            LaakeKamuTheme {
+                TietokantaVirheScreen(
+                    voiAloittaaAlusta = false,
+                    enabled = true,
+                    onRetry = {},
+                    onStartOver = {}
+                )
+            }
+        }
+        compose.onNodeWithText("vapaata tallennustilaa", substring = true).assertExists()
+        compose.onNodeWithText("Yritä uudelleen").assertExists()
+        compose.onNodeWithText("Aloita alusta").assertDoesNotExist()
     }
 }
