@@ -2,6 +2,7 @@ package fi.hh.laakekamu.data
 
 import android.content.Context
 import android.util.Log
+import fi.hh.laakekamu.reminders.AjastavaLaakeRepository
 import fi.hh.laakekamu.reminders.MuistutusScheduler
 import java.security.GeneralSecurityException
 import java.time.Clock
@@ -129,7 +130,12 @@ class AppContainer(
         MuistutusScheduler(appContext, ::database, clock, ioDispatcher)
     }
 
-    val laakeRepository: LaakeRepository by lazy { RoomLaakeRepository(::database, clock) }
+    // Every medication change resets the reminder alarms.
+    val laakeRepository: LaakeRepository by lazy {
+        AjastavaLaakeRepository(RoomLaakeRepository(::database, clock)) {
+            scheduler.rescheduleAfterChange()
+        }
+    }
 
     val annosRepository: AnnosRepository by lazy { RoomAnnosRepository(::database, clock) }
 
