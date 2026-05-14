@@ -5,6 +5,12 @@
     <!-- No INTERNET permission: health data never leaves the device. -->
     <!-- Dose reminders (Android 13+ asks the user). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Exact reminder alarms. 33+: granted at install and can't be revoked
+         (a Play policy use case: a medication reminder). 31-32: the user can revoke it. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
     <!-- supportsRtl="false": the UI is Finnish only, so it stays left to right on a phone set to
          an RTL language; otherwise the rows mirror, the progress Canvas doesn't, and the bidi
          rules move "?" and "!" to the start of the texts. -->
@@ -29,6 +35,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Reached only through the scheduler's explicit PendingIntents: no intent-filter. -->
+        <receiver
+            android:name=".reminders.AlarmReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

@@ -2,6 +2,7 @@ package fi.hh.laakekamu.data
 
 import android.content.Context
 import android.util.Log
+import fi.hh.laakekamu.reminders.MuistutusScheduler
 import java.security.GeneralSecurityException
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
@@ -122,6 +123,11 @@ class AppContainer(
     }
 
     private fun key() = SqlCipherKey(appContext, keyAlias, keyPrefs)
+
+    /** The reminder alarms; one instance, so its Mutex covers the whole process. */
+    val scheduler: MuistutusScheduler by lazy {
+        MuistutusScheduler(appContext, ::database, clock, ioDispatcher)
+    }
 
     val laakeRepository: LaakeRepository by lazy { RoomLaakeRepository(::database, clock) }
 
