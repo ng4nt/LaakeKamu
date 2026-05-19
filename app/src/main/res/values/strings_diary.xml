@@ -1,0 +1,5 @@
+<resources>
+    <!-- Oirepäiväkirja: calendar arrows, read by TalkBack -->
+    <string name="edellinen_kuukausi">Edellinen kuukausi</string>
+    <string name="seuraava_kuukausi">Seuraava kuukausi</string>
+</resources>
