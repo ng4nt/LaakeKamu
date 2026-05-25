@@ -1,6 +1,11 @@
 package fi.hh.laakekamu.ui.oirepaivakirja
 
 import androidx.lifecycle.SavedStateHandle
+import fi.hh.laakekamu.data.PaivakirjaRepository
+import fi.hh.laakekamu.data.entity.Laake
+import fi.hh.laakekamu.data.entity.Laakkeenotto
+import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.ui.format.formatWeekdayShort
 import java.time.Clock
 import java.time.Instant
@@ -9,6 +14,10 @@ import java.time.YearMonth
 import java.time.ZoneId
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -17,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,6 +35,7 @@ import org.junit.Test
 class OirepaivakirjaViewModelTest {
     private val helsinki = ZoneId.of("Europe/Helsinki")
     private val today = LocalDate.of(2025, 12, 18)
+    private val yesterday = today.minusDays(1)
 
     @Before
     fun setMain() {
@@ -119,12 +130,12 @@ class OirepaivakirjaViewModelTest {
     @Test
     fun selectionAndMonth_surviveProcessDeath() = runTest {
         val handle = SavedStateHandle()
-        val vm = viewModel(handle)
+        val vm = viewModel(handle = handle)
         vm.selectDay(LocalDate.of(2025, 11, 3))
         vm.nextMonth()
 
         val saved = handle.keys().associateWith { handle.get<Any?>(it) }
-        val restored = collecting(viewModel(SavedStateHandle(saved)))
+        val restored = collecting(viewModel(handle = SavedStateHandle(saved)))
 
         assertEquals(LocalDate.of(2025, 11, 3), restored.uiState.value.valittu)
         assertEquals(YearMonth.of(2025, 12), restored.uiState.value.kuukausi)
@@ -133,7 +144,7 @@ class OirepaivakirjaViewModelTest {
     @Test
     fun refresh_afterMidnight_movesTheDefaultSelectionToTheNewDay() = runTest {
         val clock = MutableClock(today)
-        val vm = collecting(OirepaivakirjaViewModel(SavedStateHandle(), clock))
+        val vm = collecting(viewModel(clock = clock))
         assertEquals(today, vm.uiState.value.valittu)
 
         clock.day = LocalDate.of(2026, 1, 1)
@@ -147,7 +158,7 @@ class OirepaivakirjaViewModelTest {
     @Test
     fun refresh_keepsAPickedDay() = runTest {
         val clock = MutableClock(today)
-        val vm = collecting(OirepaivakirjaViewModel(SavedStateHandle(), clock))
+        val vm = collecting(viewModel(clock = clock))
         vm.selectDay(LocalDate.of(2025, 12, 1))
 
         clock.day = today.plusDays(1)
@@ -157,13 +168,141 @@ class OirepaivakirjaViewModelTest {
         assertEquals(today.plusDays(1), vm.uiState.value.tanaan)
     }
 
+    // The diary's data in the state
+
+    @Test
+    fun state_showsTheSelectedDaysDoses_andTheMonthsChecks() = runTest {
+        val repo = FakeRepository(
+            laakkeet = listOf(laake(1, "A aamulääke")),
+            muistutukset = listOf(muistutus(1, 1, 480)),
+            otot = listOf(otto(1, yesterday), otto(1, today))
+        )
+        val vm = collecting(viewModel(repo))
+
+        val state = vm.uiState.value
+        assertFalse(state.loading)
+        assertEquals(listOf("A aamulääke"), state.otetut.map { it.nimi })
+        assertEquals(setOf(yesterday, today), state.valmiit)
+    }
+
+    @Test
+    fun selectingAnotherDay_showsItsDoses_andATickUpdatesTheCheck() = runTest {
+        val repo = FakeRepository(
+            laakkeet = listOf(laake(1, "A aamulääke")),
+            muistutukset = listOf(muistutus(1, 1, 480)),
+            otot = listOf(otto(1, yesterday))
+        )
+        val vm = collecting(viewModel(repo))
+
+        vm.selectDay(today.minusDays(2))
+        assertEquals(emptyList<OtettuRivi>(), vm.uiState.value.otetut)
+
+        repo.otot.value += otto(1, today)
+        assertEquals(setOf(yesterday, today), vm.uiState.value.valmiit)
+    }
+
+    @Test
+    fun previousMonth_readsThatMonthsChecks() = runTest {
+        val repo = FakeRepository(
+            laakkeet = listOf(laake(1, "A")),
+            muistutukset = listOf(muistutus(1, 1, 480)),
+            otot = listOf(otto(1, yesterday))
+        )
+        val vm = collecting(viewModel(repo))
+
+        vm.previousMonth()
+
+        // November: every day is before the medication started (8.12.).
+        assertEquals(emptySet<LocalDate>(), vm.uiState.value.valmiit)
+        assertEquals(YearMonth.of(2025, 11), repo.lastMonthRead)
+    }
+
+    @Test
+    fun aFailedRead_showsTheError_andRefreshReadsAgain() = runTest {
+        val repo = FakeRepository(failures = 1)
+        val vm = collecting(viewModel(repo))
+        assertTrue(vm.uiState.value.loadError)
+
+        vm.refresh()
+
+        assertFalse(vm.uiState.value.loadError)
+        assertFalse(vm.uiState.value.loading)
+    }
+
     /** Keeps uiState subscribed for the rest of the test, as the screen does. */
     private fun TestScope.collecting(vm: OirepaivakirjaViewModel) = vm.also {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { it.uiState.collect {} }
     }
 
-    private fun viewModel(handle: SavedStateHandle = SavedStateHandle()) =
-        OirepaivakirjaViewModel(handle, MutableClock(today))
+    private fun viewModel(
+        repository: PaivakirjaRepository = FakeRepository(),
+        handle: SavedStateHandle = SavedStateHandle(),
+        clock: Clock = MutableClock(today)
+    ) = OirepaivakirjaViewModel(handle, repository, clock)
+
+    private fun laake(
+        id: Long,
+        nimi: String,
+        kuinkaUsein: KuinkaUsein = KuinkaUsein.PAIVITTAIN,
+        start: LocalDate = today.minusDays(10)
+    ) = Laake(
+        laakeId = id,
+        nimi = nimi,
+        tyyppiId = 1,
+        annosmaara = "5",
+        yksikko = "mg",
+        kuinkaUsein = kuinkaUsein,
+        aloituspv = start,
+        lopetuspv = null
+    )
+
+    private fun muistutus(
+        id: Long,
+        laakeId: Long,
+        aika: Int,
+        alkaen: LocalDate = today.minusDays(10),
+        asti: LocalDate? = null
+    ) = Muistutus(
+        muistutusId = id,
+        laakeId = laakeId,
+        aika = aika,
+        voimassaAlkaen = alkaen,
+        voimassaAsti = asti
+    )
+
+    private fun otto(muistutusId: Long, paiva: LocalDate) = Laakkeenotto(
+        muistutusId = muistutusId,
+        paivamaara = paiva,
+        ottoaika = paiva.atTime(21, 0).atZone(helsinki).toInstant()
+    )
+
+    /** The diary's data in memory; the first [failures] reads of the medications fail. */
+    private class FakeRepository(
+        laakkeet: List<Laake> = emptyList(),
+        muistutukset: List<Muistutus> = emptyList(),
+        otot: List<Laakkeenotto> = emptyList(),
+        private var failures: Int = 0
+    ) : PaivakirjaRepository {
+        val laakkeet = MutableStateFlow(laakkeet)
+        val muistutukset = MutableStateFlow(muistutukset)
+        val otot = MutableStateFlow(otot)
+        var lastMonthRead: YearMonth? = null
+
+        override fun observeLaakkeet(): Flow<List<Laake>> = flow {
+            if (failures > 0) {
+                failures--
+                error("database unavailable")
+            }
+            laakkeet.collect { emit(it) }
+        }
+
+        override fun observeMuistutukset(): Flow<List<Muistutus>> = muistutukset
+
+        override fun observeOtot(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>> {
+            if (alku != loppu) lastMonthRead = YearMonth.from(alku)
+            return otot.map { rows -> rows.filter { it.paivamaara in alku..loppu } }
+        }
+    }
 
     /** A clock at noon of [day] that a test can move to another day. */
     private inner class MutableClock(var day: LocalDate) : Clock() {
