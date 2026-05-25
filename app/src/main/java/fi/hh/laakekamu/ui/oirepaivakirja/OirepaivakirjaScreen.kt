@@ -12,11 +12,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -35,8 +38,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -45,7 +52,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.components.LkScreenTitle
 import fi.hh.laakekamu.ui.format.formatDate
+import fi.hh.laakekamu.ui.format.formatDayMonth
 import fi.hh.laakekamu.ui.format.formatMonthTitle
+import fi.hh.laakekamu.ui.format.formatTime
 import fi.hh.laakekamu.ui.format.formatWeekday
 import fi.hh.laakekamu.ui.format.formatWeekdayShort
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
@@ -74,9 +83,26 @@ private val GRID_BOTTOM = 20.dp
 private val ROW_HEIGHT = 48.dp
 private val SELECTED = 40.dp
 
+// The ✓ of a complete day: the check icon on a white badge with a primary ring, over the
+// top end corner of the date's 40dp square, so it reads the same on the selected square and
+// stays clear of the digits (checked on the emulator).
+private val BADGE = 18.dp
+private val BADGE_RING = 1.5.dp
+private val BADGE_ICON = 13.dp
+private val BADGE_OFFSET = 5.dp
+
+// Figma: the lists 26dp under the box at x 52, 20sp; bullets indented as in
+// Lääkelista, the text 30dp from the list's edge.
+private val BOX_TO_LISTS = 26.dp
+private val LISTS_START = 52.dp
+private val LISTS_END = 16.dp
+private val BULLET_INDENT = 13.dp
+private val BULLET_WIDTH = 17.dp
+
 /**
  * Oirepäiväkirja: the month calendar, Monday first, with Finnish month and weekday
- * names. ‹ › change the month; tapping a day selects it.
+ * names and a ✓ on complete days. ‹ › change the month; tapping a day selects it. Under
+ * the calendar: the selected day's taken doses, deleted medications included.
  */
 @Composable
 fun OirepaivakirjaScreen(
@@ -124,6 +150,64 @@ private fun OirepaivakirjaContent(
             onSelect = onSelect,
             modifier = Modifier.padding(start = BOX_START, end = BOX_END)
         )
+        Spacer(Modifier.height(BOX_TO_LISTS))
+        Column(Modifier.padding(start = LISTS_START, end = LISTS_END)) {
+            when {
+                state.loadError -> Text(
+                    text = stringResource(R.string.virhe_paivakirja),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+                state.loading -> Unit
+                else -> Otetut(state.valittu, state.tanaan, state.otetut)
+            }
+        }
+    }
+}
+
+/** "Tänään otetut lääkkeet" / "18.12. otetut lääkkeet" and the day's taken doses. */
+@Composable
+private fun Otetut(valittu: LocalDate, tanaan: LocalDate, otetut: List<OtettuRivi>) {
+    Text(
+        text = if (valittu == tanaan) {
+            stringResource(R.string.otetut_tanaan)
+        } else {
+            stringResource(R.string.otetut_paivana, formatDayMonth(valittu))
+        },
+        style = MaterialTheme.typography.bodyLarge,
+        modifier = Modifier.semantics { heading() }
+    )
+    if (otetut.isEmpty()) {
+        Text(
+            text = stringResource(R.string.ei_otettuja),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(start = BULLET_INDENT + BULLET_WIDTH)
+        )
+    }
+    otetut.forEach { rivi ->
+        Luettelorivi(
+            buildAnnotatedString {
+                append(rivi.nimi)
+                append(" ")
+                withStyle(SpanStyle(color = LkPrimary, fontWeight = FontWeight.Bold)) {
+                    append(stringResource(R.string.annos, rivi.annosmaara, rivi.yksikko))
+                }
+                append(" ")
+                append(stringResource(R.string.otettu_klo, formatTime(rivi.aika)))
+            }
+        )
+    }
+}
+
+/** A bulleted 20sp line, read by TalkBack without the bullet (as in Lääkelista). */
+@Composable
+private fun Luettelorivi(text: AnnotatedString) {
+    Row(Modifier.padding(start = BULLET_INDENT).semantics(mergeDescendants = true) {}) {
+        Text(
+            text = "•",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.width(BULLET_WIDTH).clearAndSetSemantics {}
+        )
+        Text(text = text, style = MaterialTheme.typography.bodyLarge)
     }
 }
 
@@ -154,6 +238,7 @@ private fun Kalenteri(
                                 day = day,
                                 selected = day == state.valittu,
                                 today = day == state.tanaan,
+                                valmis = day in state.valmiit,
                                 onSelect = onSelect,
                                 modifier = Modifier.weight(1f)
                             )
@@ -235,13 +320,16 @@ private fun Viikonpaivat() {
 
 /**
  * One date (25sp), or an empty cell outside the month. The selected date is Bold white on a
- * 40dp primary square. TalkBack reads "torstai 18.12.2025", plus ", tänään" for today.
+ * 40dp primary square. A complete day ([valmis]) has the Figma check icon in the square's
+ * corner: a shape, so colour isn't the only signal. TalkBack reads
+ * "torstai 18.12.2025", plus ", tänään" for today and ", kaikki lääkkeet otettu" when complete.
  */
 @Composable
 private fun Paiva(
     day: LocalDate?,
     selected: Boolean,
     today: Boolean,
+    valmis: Boolean,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -250,7 +338,8 @@ private fun Paiva(
         return
     }
     val nimi = stringResource(R.string.paiva_ja_pvm, formatWeekday(day), formatDate(day))
-    val kuvaus = if (today) stringResource(R.string.paiva_tanaan, nimi) else nimi
+    val tanaan = if (today) stringResource(R.string.paiva_tanaan, nimi) else nimi
+    val kuvaus = if (valmis) stringResource(R.string.paiva_valmis, tanaan) else tanaan
     Box(
         modifier = modifier
             .heightIn(min = ROW_HEIGHT)
@@ -272,6 +361,24 @@ private fun Paiva(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.clearAndSetSemantics {}
             )
+            if (valmis) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = BADGE_OFFSET, y = -BADGE_OFFSET)
+                        .size(BADGE)
+                        .background(Color.White, CircleShape)
+                        .border(BADGE_RING, LkPrimary, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_check),
+                        contentDescription = null,
+                        tint = LkPrimary,
+                        modifier = Modifier.size(BADGE_ICON)
+                    )
+                }
+            }
         }
     }
 }
@@ -282,7 +389,17 @@ private fun OirepaivakirjaPreview() {
     val day = LocalDate.of(2025, 12, 18)
     LaakeKamuTheme {
         OirepaivakirjaContent(
-            state = OirepaivakirjaUiState(day, day, YearMonth.from(day)),
+            state = OirepaivakirjaUiState(
+                tanaan = day,
+                valittu = day,
+                kuukausi = YearMonth.from(day),
+                otetut = listOf(
+                    OtettuRivi("A aamulääke", "5", "mg", 480),
+                    OtettuRivi("B aamulääke", "10", "ml", 480)
+                ),
+                valmiit = setOf(day.minusDays(2), day.minusDays(1), day),
+                loading = false
+            ),
             onPrevious = {},
             onNext = {},
             onSelect = {}

@@ -2,4 +2,13 @@
     <!-- Oirepäiväkirja: calendar arrows, read by TalkBack -->
     <string name="edellinen_kuukausi">Edellinen kuukausi</string>
     <string name="seuraava_kuukausi">Seuraava kuukausi</string>
+    <!-- A complete day for TalkBack: "torstai 18.12.2025, kaikki lääkkeet otettu" -->
+    <string name="paiva_valmis">%1$s, kaikki lääkkeet otettu</string>
+
+    <!-- The selected day's taken doses: "A aamulääke 5 mg (klo 8.00)" -->
+    <string name="otetut_tanaan">Tänään otetut lääkkeet</string>
+    <string name="otetut_paivana">%1$s otetut lääkkeet</string>
+    <string name="otettu_klo">(klo %1$s)</string>
+    <string name="ei_otettuja">Ei otettuja lääkkeitä</string>
+    <string name="virhe_paivakirja">Päiväkirjaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
 </resources>
