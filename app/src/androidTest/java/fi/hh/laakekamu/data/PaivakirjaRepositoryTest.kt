@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.domain.KuinkaUsein
 import java.time.Clock
 import java.time.LocalDate
@@ -19,8 +20,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * The diary's side: the diary reads the taken doses of a range of days, and a
- * deleted medication's taken doses, reminders and name are still there for it.
+ * The diary's side: the diary reads the taken doses of a range of days, and
+ * a deleted medication's taken doses, reminders, name and side effects are still there for it.
  */
 @RunWith(AndroidJUnit4::class)
 class PaivakirjaRepositoryTest {
@@ -75,6 +76,21 @@ class PaivakirjaRepositoryTest {
         assertEquals(otto.muistutusId, reminder.muistutusId)
         assertEquals("A aamulääke", laake.nimi)
         assertFalse(laake.aktiivinen)
+    }
+
+    @Test
+    fun deletedMedication_keepsItsSideEffectLink() = runTest {
+        addWithReminder("A aamulääke")
+        val laakeId = paivakirja.observeLaakkeet().first().single().laakeId
+        OireRepository { db }.add(
+            Oiremerkinta(kuvaus = "Huimaus", laakeId = laakeId, aloituspv = today, lopetuspv = null)
+        )
+
+        laakkeet.delete(laakeId)
+
+        val oire = paivakirja.observeOireet().first().single()
+        assertEquals("Huimaus", oire.kuvaus)
+        assertEquals(laakeId, oire.laakeId)
     }
 
     /** Adds a daily medication at 8.00 that started 10 days ago; returns its reminder id. */

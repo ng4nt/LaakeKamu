@@ -5,6 +5,7 @@ import fi.hh.laakekamu.data.PaivakirjaRepository
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.ui.format.formatWeekdayShort
 import java.time.Clock
@@ -286,6 +287,7 @@ class OirepaivakirjaViewModelTest {
         val laakkeet = MutableStateFlow(laakkeet)
         val muistutukset = MutableStateFlow(muistutukset)
         val otot = MutableStateFlow(otot)
+        val oireet = MutableStateFlow(emptyList<Oiremerkinta>())
         var lastMonthRead: YearMonth? = null
 
         override fun observeLaakkeet(): Flow<List<Laake>> = flow {
@@ -297,6 +299,8 @@ class OirepaivakirjaViewModelTest {
         }
 
         override fun observeMuistutukset(): Flow<List<Muistutus>> = muistutukset
+
+        override fun observeOireet(): Flow<List<Oiremerkinta>> = oireet
 
         override fun observeOtot(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>> {
             if (alku != loppu) lastMonthRead = YearMonth.from(alku)

@@ -3,15 +3,17 @@ package fi.hh.laakekamu.data
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 
 /**
- * What Oirepäiväkirja reads to show taken doses and complete days: medications and
- * reminders including deleted and ended ones (a deleted medication's taken doses stay in the
- * diary), and the doses taken over a range of days. Read-only.
+ * What Oirepäiväkirja reads to show taken doses and complete days and symptoms:
+ * medications and reminders including deleted and ended ones (a deleted medication's taken
+ * doses and side effects stay in the diary), the doses taken over a range of days, and
+ * the symptom entries. Read-only.
  */
 interface PaivakirjaRepository {
     /** Every medication, deleted ones too. */
@@ -22,6 +24,9 @@ interface PaivakirjaRepository {
 
     /** The doses taken on days [alku]..[loppu] (inclusive). */
     fun observeOtot(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>>
+
+    /** Every symptom entry. */
+    fun observeOireet(): Flow<List<Oiremerkinta>>
 }
 
 /** Room implementation of [PaivakirjaRepository]; [database] opens the database lazily. */
@@ -37,5 +42,9 @@ class RoomPaivakirjaRepository(private val database: suspend () -> AppDatabase) 
 
     override fun observeOtot(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>> = flow {
         emitAll(database().laakkeenottoDao().observeBetween(alku, loppu))
+    }
+
+    override fun observeOireet(): Flow<List<Oiremerkinta>> = flow {
+        emitAll(database().oiremerkintaDao().observeAll())
     }
 }
