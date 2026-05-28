@@ -11,4 +11,18 @@
     <string name="otettu_klo">(klo %1$s)</string>
     <string name="ei_otettuja">Ei otettuja lääkkeitä</string>
     <string name="virhe_paivakirja">Päiväkirjaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
+    <!-- Lisää uusi oire -->
+    <string name="oire_label">Oire</string>
+    <string name="oire_placeholder">Kuvaile oire</string>
+    <string name="sivuoire_label">Onko jonkun lääkkeen sivuoire?</string>
+    <string name="sivuoire_placeholder">Valitse lääke</string>
+    <string name="ei_sivuoire">Ei sivuoire</string>
+    <string name="alkamispaiva_label">Oireen alkamispäivä</string>
+    <string name="loppumispaiva_label">Oireen loppumispäivä</string>
+    <string name="virhe_oire_puuttuu">Oire puuttuu.</string>
+    <string name="virhe_loppu_ennen_alkua">Loppumispäivä ei voi olla ennen alkamispäivää.</string>
+    <string name="virhe_laakkeet_lataus">Lääkkeitä ei voitu ladata. Oireen voi silti tallentaa.</string>
+    <string name="virhe_oire_tallennus">Oireen tallennus epäonnistui. Yritä uudelleen.</string>
+    <string name="oire_tallennettu">Oire tallennettu</string>
 </resources>

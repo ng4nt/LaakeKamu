@@ -86,7 +86,7 @@ class OirepaivakirjaEndToEndTest {
                         snackbarHostState = remember { SnackbarHostState() },
                         viewModel = etusivu
                     )
-                    Naytto.PAIVAKIRJA -> OirepaivakirjaScreen(viewModel = paivakirja)
+                    Naytto.PAIVAKIRJA -> OirepaivakirjaScreen(onAdd = {}, viewModel = paivakirja)
                 }
             }
         }

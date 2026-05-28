@@ -3,6 +3,7 @@ package fi.hh.laakekamu.ui.oirepaivakirja
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.components.LkScreenTitle
+import fi.hh.laakekamu.ui.components.LkSmallButton
 import fi.hh.laakekamu.ui.format.formatDate
 import fi.hh.laakekamu.ui.format.formatDayMonth
 import fi.hh.laakekamu.ui.format.formatMonthTitle
@@ -99,6 +101,11 @@ private val LISTS_END = 16.dp
 private val BULLET_INDENT = 13.dp
 private val BULLET_WIDTH = 17.dp
 
+// Figma: "Lisää" and "Muokkaa" at x 34 and 243, 56dp above the bottom bar.
+private val BUTTONS_START = 34.dp
+private val BUTTONS_END = 19.dp
+private val BUTTONS_BOTTOM = 56.dp
+
 /**
  * Oirepäiväkirja: the month calendar, Monday first, with Finnish month and weekday
  * names and a ✓ on complete days. ‹ › change the month; tapping a day selects it. Under
@@ -106,6 +113,7 @@ private val BULLET_WIDTH = 17.dp
  */
 @Composable
 fun OirepaivakirjaScreen(
+    onAdd: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: OirepaivakirjaViewModel = viewModel(factory = OirepaivakirjaViewModel.Factory)
 ) {
@@ -119,6 +127,7 @@ fun OirepaivakirjaScreen(
         onPrevious = viewModel::previousMonth,
         onNext = viewModel::nextMonth,
         onSelect = viewModel::selectDay,
+        onAdd = { onAdd(state.valittu) },
         modifier = modifier
     )
 }
@@ -129,14 +138,40 @@ private fun OirepaivakirjaContent(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onSelect: (LocalDate) -> Unit,
+    onAdd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 24.dp)
-    ) {
+    Column(modifier.fillMaxSize()) {
+        // The calendar and the lists scroll; the buttons stay put, as in Lääkelista.
+        Column(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 24.dp)
+        ) {
+            Paivakirja(state, onPrevious, onNext, onSelect)
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = BUTTONS_START, end = BUTTONS_END, bottom = BUTTONS_BOTTOM),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            LkSmallButton(stringResource(R.string.lisaa), onClick = onAdd, filled = true)
+        }
+    }
+}
+
+/** The title, the calendar and the selected day's lists. */
+@Composable
+private fun Paivakirja(
+    state: OirepaivakirjaUiState,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onSelect: (LocalDate) -> Unit
+) {
+    Column {
         LkScreenTitle(
             text = stringResource(R.string.nav_oirepaivakirja),
             icon = R.drawable.ic_calendar,
@@ -402,7 +437,8 @@ private fun OirepaivakirjaPreview() {
             ),
             onPrevious = {},
             onNext = {},
-            onSelect = {}
+            onSelect = {},
+            onAdd = {}
         )
     }
 }
