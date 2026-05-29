@@ -3,6 +3,7 @@ package fi.hh.laakekamu.ui.oirepaivakirja
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.domain.isDayComplete
 import fi.hh.laakekamu.ui.etusivu.etusivunRyhmat
 import fi.hh.laakekamu.ui.format.SUOMI
@@ -59,3 +60,41 @@ fun valmiitPaivat(
         }
         .toSet()
 }
+
+/** A symptom on the selected day; [sivuoire] is the linked medication's name, if any. */
+data class OireRivi(val merkintaId: Long, val kuvaus: String, val sivuoire: String?)
+
+/**
+ * The symptoms active on [paiva] (see [isActiveOn]), newest start first, each with its side
+ * effect's medication name. The name is found among every medication, deleted ones too, so a
+ * link to a deleted medication still shows.
+ */
+fun oireetPaivalle(
+    paiva: LocalDate,
+    tanaan: LocalDate,
+    oireet: List<Oiremerkinta>,
+    laakkeet: List<Laake>
+): List<OireRivi> {
+    val nimet = laakkeet.associate { it.laakeId to it.nimi }
+    val newestFirst = compareByDescending<Oiremerkinta> { it.aloituspv }
+        .thenByDescending { it.merkintaId }
+    return oireet
+        .filter { it.isActiveOn(paiva, tanaan) }
+        .sortedWith(newestFirst)
+        .map { OireRivi(it.merkintaId, it.kuvaus, it.laakeId?.let(nimet::get)) }
+}
+
+/** The days of [kuukausi] with at least one active symptom (the • marker). */
+fun oirePaivat(kuukausi: YearMonth, tanaan: LocalDate, oireet: List<Oiremerkinta>): Set<LocalDate> =
+    (1..kuukausi.lengthOfMonth())
+        .map { kuukausi.atDay(it) }
+        .filter { day -> oireet.any { it.isActiveOn(day, tanaan) } }
+        .toSet()
+
+/**
+ * A symptom is active from its start to its end, both included. An open end means it still
+ * continues, so it reaches [tanaan] but not the days after it, which haven't come yet; an end
+ * date the user gave counts as it is.
+ */
+private fun Oiremerkinta.isActiveOn(day: LocalDate, tanaan: LocalDate): Boolean =
+    !day.isBefore(aloituspv) && !day.isAfter(lopetuspv ?: maxOf(tanaan, aloituspv))

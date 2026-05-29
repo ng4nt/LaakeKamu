@@ -219,6 +219,18 @@ class OirepaivakirjaViewModelTest {
     }
 
     @Test
+    fun aNewSymptom_showsOnItsDays_andInTheSelectedDaysList() = runTest {
+        val repo = FakeRepository(laakkeet = listOf(laake(1, "A aamulääke")))
+        val vm = collecting(viewModel(repo))
+
+        repo.oireet.value = listOf(Oiremerkinta(1, "Huimaus", 1, yesterday, today))
+
+        val state = vm.uiState.value
+        assertEquals(listOf(OireRivi(1, "Huimaus", "A aamulääke")), state.oireet)
+        assertEquals(setOf(yesterday, today), state.oirePaivat)
+    }
+
+    @Test
     fun aFailedRead_showsTheError_andRefreshReadsAgain() = runTest {
         val repo = FakeRepository(failures = 1)
         val vm = collecting(viewModel(repo))

@@ -60,6 +60,7 @@ import fi.hh.laakekamu.ui.format.formatTime
 import fi.hh.laakekamu.ui.format.formatWeekday
 import fi.hh.laakekamu.ui.format.formatWeekdayShort
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
+import fi.hh.laakekamu.ui.theme.LkMuted
 import fi.hh.laakekamu.ui.theme.LkPrimary
 import java.time.LocalDate
 import java.time.YearMonth
@@ -93,9 +94,18 @@ private val BADGE_RING = 1.5.dp
 private val BADGE_ICON = 13.dp
 private val BADGE_OFFSET = 5.dp
 
+// The • of a day with a symptom: a dot centred under the date's square, in the gap
+// between the rows, clear of the digits (checked on the emulator). A different shape from the ✓, so
+// the two markers aren't told apart by colour.
+private val DOT = 7.dp
+private val DOT_DROP = 4.dp
+
 // Figma: the lists 26dp under the box at x 52, 20sp; bullets indented as in
 // Lääkelista, the text 30dp from the list's edge.
 private val BOX_TO_LISTS = 26.dp
+
+// Figma: an empty 20sp line between the taken doses and "Oireet".
+private val LISTS_GAP = 27.dp
 private val LISTS_START = 52.dp
 private val LISTS_END = 16.dp
 private val BULLET_INDENT = 13.dp
@@ -193,7 +203,11 @@ private fun Paivakirja(
                     style = MaterialTheme.typography.bodyLarge
                 )
                 state.loading -> Unit
-                else -> Otetut(state.valittu, state.tanaan, state.otetut)
+                else -> {
+                    Otetut(state.valittu, state.tanaan, state.otetut)
+                    Spacer(Modifier.height(LISTS_GAP))
+                    Oireet(state.oireet)
+                }
             }
         }
     }
@@ -233,16 +247,47 @@ private fun Otetut(valittu: LocalDate, tanaan: LocalDate, otetut: List<OtettuRiv
     }
 }
 
-/** A bulleted 20sp line, read by TalkBack without the bullet (as in Lääkelista). */
+/** "Oireet" (Bold) and the selected day's symptoms, each with "sivuoire: X" when linked. */
 @Composable
-private fun Luettelorivi(text: AnnotatedString) {
+private fun Oireet(oireet: List<OireRivi>) {
+    Text(
+        text = stringResource(R.string.oireet_otsikko),
+        style = MaterialTheme.typography.titleMedium,
+        modifier = Modifier.semantics { heading() }
+    )
+    if (oireet.isEmpty()) {
+        Text(
+            text = stringResource(R.string.ei_oireita),
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(start = BULLET_INDENT + BULLET_WIDTH)
+        )
+    }
+    oireet.forEach { oire ->
+        Luettelorivi(
+            text = AnnotatedString(oire.kuvaus),
+            lisa = oire.sivuoire?.let { stringResource(R.string.sivuoire_rivi, it) }
+        )
+    }
+}
+
+/**
+ * A bulleted 20sp line with an optional 18sp [lisa] line under it (as Lääkelista's label),
+ * read by TalkBack as one item without the bullet.
+ */
+@Composable
+private fun Luettelorivi(text: AnnotatedString, lisa: String? = null) {
     Row(Modifier.padding(start = BULLET_INDENT).semantics(mergeDescendants = true) {}) {
         Text(
             text = "•",
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.width(BULLET_WIDTH).clearAndSetSemantics {}
         )
-        Text(text = text, style = MaterialTheme.typography.bodyLarge)
+        Column {
+            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+            if (lisa != null) {
+                Text(text = lisa, style = MaterialTheme.typography.bodyMedium, color = LkMuted)
+            }
+        }
     }
 }
 
@@ -274,6 +319,7 @@ private fun Kalenteri(
                                 selected = day == state.valittu,
                                 today = day == state.tanaan,
                                 valmis = day in state.valmiit,
+                                oire = day in state.oirePaivat,
                                 onSelect = onSelect,
                                 modifier = Modifier.weight(1f)
                             )
@@ -365,6 +411,7 @@ private fun Paiva(
     selected: Boolean,
     today: Boolean,
     valmis: Boolean,
+    oire: Boolean,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -374,7 +421,8 @@ private fun Paiva(
     }
     val nimi = stringResource(R.string.paiva_ja_pvm, formatWeekday(day), formatDate(day))
     val tanaan = if (today) stringResource(R.string.paiva_tanaan, nimi) else nimi
-    val kuvaus = if (valmis) stringResource(R.string.paiva_valmis, tanaan) else tanaan
+    val valmisKuvaus = if (valmis) stringResource(R.string.paiva_valmis, tanaan) else tanaan
+    val kuvaus = if (oire) stringResource(R.string.paiva_oire, valmisKuvaus) else valmisKuvaus
     Box(
         modifier = modifier
             .heightIn(min = ROW_HEIGHT)
@@ -415,6 +463,15 @@ private fun Paiva(
                 }
             }
         }
+        if (oire) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .offset(y = DOT_DROP)
+                    .size(DOT)
+                    .background(LkPrimary, CircleShape)
+            )
+        }
     }
 }
 
@@ -433,6 +490,11 @@ private fun OirepaivakirjaPreview() {
                     OtettuRivi("B aamulääke", "10", "ml", 480)
                 ),
                 valmiit = setOf(day.minusDays(2), day.minusDays(1), day),
+                oireet = listOf(
+                    OireRivi(1, "Huimaus", "A aamulääke"),
+                    OireRivi(2, "Vatsakipu", null)
+                ),
+                oirePaivat = setOf(day.minusDays(1), day),
                 loading = false
             ),
             onPrevious = {},

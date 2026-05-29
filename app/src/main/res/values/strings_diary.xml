@@ -10,6 +10,12 @@
     <string name="otetut_paivana">%1$s otetut lääkkeet</string>
     <string name="otettu_klo">(klo %1$s)</string>
     <string name="ei_otettuja">Ei otettuja lääkkeitä</string>
+    <!-- The selected day's symptoms: "Huimaus" / "sivuoire: A aamulääke" -->
+    <string name="oireet_otsikko">Oireet</string>
+    <string name="sivuoire_rivi">sivuoire: %1$s</string>
+    <string name="ei_oireita">Ei kirjattuja oireita</string>
+    <!-- A day with a symptom for TalkBack: "torstai 18.12.2025, oire kirjattu" -->
+    <string name="paiva_oire">%1$s, oire kirjattu</string>
     <string name="virhe_paivakirja">Päiväkirjaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
 
     <!-- Lisää uusi oire -->

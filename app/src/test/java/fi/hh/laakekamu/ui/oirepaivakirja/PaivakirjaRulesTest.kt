@@ -3,6 +3,7 @@ package fi.hh.laakekamu.ui.oirepaivakirja
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.domain.KuinkaUsein
 import java.time.LocalDate
 import java.time.YearMonth
@@ -111,6 +112,63 @@ class PaivakirjaRulesTest {
 
         assertTrue(today in valmiit)
     }
+
+    // Symptoms
+
+    @Test
+    fun oireetPaivalle_activeOnTheDay_newestFirst_withTheLinkedName() {
+        val deleted = laake(1, "A aamulääke").copy(aktiivinen = false)
+        val oireet = listOf(
+            oire(1, "Huimaus", start = today.minusDays(3), end = today.minusDays(1), laakeId = 1),
+            oire(2, "Vatsakipu", start = today.minusDays(1)),
+            oire(3, "Päänsärky", start = today.minusDays(5), end = today.minusDays(2)),
+            oire(4, "Tuleva", start = today)
+        )
+
+        val rivit = oireetPaivalle(yesterday, today, oireet, listOf(deleted))
+
+        assertEquals(
+            listOf(
+                OireRivi(2, "Vatsakipu", null),
+                OireRivi(1, "Huimaus", "A aamulääke")
+            ),
+            rivit
+        )
+    }
+
+    @Test
+    fun oirePaivat_marksEveryDayOfASymptom_andAnOpenEndReachesToday() {
+        val oireet = listOf(
+            oire(1, "Huimaus", start = LocalDate.of(2025, 11, 29), end = LocalDate.of(2025, 12, 2)),
+            oire(2, "Väsymys", start = today.minusDays(2)),
+            // An end date the user gave counts, also in the future.
+            oire(3, "Ihottuma", start = LocalDate.of(2025, 12, 30), end = LocalDate.of(2026, 1, 2))
+        )
+
+        val paivat = oirePaivat(YearMonth.of(2025, 12), today, oireet)
+
+        assertEquals(
+            setOf(1, 2, 16, 17, 18, 30, 31).map { LocalDate.of(2025, 12, it) }.toSet(),
+            paivat
+        )
+    }
+
+    @Test
+    fun anOpenSymptomStartingInTheFuture_showsOnItsStartDay() {
+        val tuleva = oire(1, "Leikkaus", start = today.plusDays(3))
+
+        val paivat = oirePaivat(YearMonth.from(today), today, listOf(tuleva))
+
+        assertEquals(setOf(today.plusDays(3)), paivat)
+    }
+
+    private fun oire(
+        id: Long,
+        kuvaus: String,
+        start: LocalDate,
+        end: LocalDate? = null,
+        laakeId: Long? = null
+    ) = Oiremerkinta(id, kuvaus, laakeId, start, end)
 
     private fun laake(
         id: Long,

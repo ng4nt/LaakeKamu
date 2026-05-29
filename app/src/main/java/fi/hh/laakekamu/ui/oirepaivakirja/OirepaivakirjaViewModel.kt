@@ -40,6 +40,10 @@ data class OirepaivakirjaUiState(
     val otetut: List<OtettuRivi> = emptyList(),
     /** The days of [kuukausi] whose due doses were all taken (✓). */
     val valmiit: Set<LocalDate> = emptySet(),
+    /** The symptoms active on [valittu]. */
+    val oireet: List<OireRivi> = emptyList(),
+    /** The days of [kuukausi] with an active symptom (•). */
+    val oirePaivat: Set<LocalDate> = emptySet(),
     val loading: Boolean = true,
     /** The diary couldn't be read (e.g. database unavailable). */
     val loadError: Boolean = false
@@ -91,8 +95,9 @@ class OirepaivakirjaViewModel(
                 repository.observeLaakkeet(),
                 repository.observeMuistutukset(),
                 repository.observeOtot(v.kuukausi.atDay(1), v.kuukausi.atEndOfMonth()),
-                repository.observeOtot(v.valittu, v.valittu)
-            ) { laakkeet, muistutukset, kuukaudenOtot, paivanOtot ->
+                repository.observeOtot(v.valittu, v.valittu),
+                repository.observeOireet()
+            ) { laakkeet, muistutukset, kuukaudenOtot, paivanOtot, oireet ->
                 Tiedot(
                     valittu = v.valittu,
                     kuukausi = v.kuukausi,
@@ -103,7 +108,9 @@ class OirepaivakirjaViewModel(
                         laakkeet,
                         muistutukset,
                         kuukaudenOtot
-                    )
+                    ),
+                    oireet = oireetPaivalle(v.valittu, v.nyt.toLocalDate(), oireet, laakkeet),
+                    oirePaivat = oirePaivat(v.kuukausi, v.nyt.toLocalDate(), oireet)
                 )
             }
         }
@@ -121,7 +128,13 @@ class OirepaivakirjaViewModel(
         when {
             data === VIRHE -> base.copy(loading = false, loadError = true)
             data == null || data.valittu != v.valittu || data.kuukausi != v.kuukausi -> base
-            else -> base.copy(otetut = data.otetut, valmiit = data.valmiit, loading = false)
+            else -> base.copy(
+                otetut = data.otetut,
+                valmiit = data.valmiit,
+                oireet = data.oireet,
+                oirePaivat = data.oirePaivat,
+                loading = false
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), current().toUiState())
 
@@ -176,7 +189,9 @@ class OirepaivakirjaViewModel(
         val valittu: LocalDate,
         val kuukausi: YearMonth,
         val otetut: List<OtettuRivi>,
-        val valmiit: Set<LocalDate>
+        val valmiit: Set<LocalDate>,
+        val oireet: List<OireRivi>,
+        val oirePaivat: Set<LocalDate>
     )
 
     companion object {
@@ -184,7 +199,15 @@ class OirepaivakirjaViewModel(
         private const val KEY_KUUKAUSI = "kuukausi"
 
         /** Marks a failed read; compared by identity. */
-        private val VIRHE = Tiedot(LocalDate.MIN, YearMonth.of(0, 1), emptyList(), emptySet())
+        private val VIRHE =
+            Tiedot(
+                LocalDate.MIN,
+                YearMonth.of(0, 1),
+                emptyList(),
+                emptySet(),
+                emptyList(),
+                emptySet()
+            )
 
         val Factory = viewModelFactory {
             initializer {
