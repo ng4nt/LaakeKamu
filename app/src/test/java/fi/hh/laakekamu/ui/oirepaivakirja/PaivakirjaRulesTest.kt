@@ -128,10 +128,7 @@ class PaivakirjaRulesTest {
         val rivit = oireetPaivalle(yesterday, today, oireet, listOf(deleted))
 
         assertEquals(
-            listOf(
-                OireRivi(2, "Vatsakipu", null),
-                OireRivi(1, "Huimaus", "A aamulääke")
-            ),
+            listOf(OireRivi(oireet[1], null), OireRivi(oireet[0], "A aamulääke")),
             rivit
         )
     }

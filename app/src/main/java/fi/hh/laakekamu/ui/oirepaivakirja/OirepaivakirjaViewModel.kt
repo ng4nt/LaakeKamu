@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import fi.hh.laakekamu.LaakeKamuApp
+import fi.hh.laakekamu.data.OireRepository
 import fi.hh.laakekamu.data.PaivakirjaRepository
 import java.time.Clock
 import java.time.DayOfWeek
@@ -15,6 +16,7 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZonedDateTime
 import java.time.temporal.ChronoUnit
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -28,6 +30,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** Oirepäiväkirja: the calendar's month and selected day, and what the diary shows for them. */
 data class OirepaivakirjaUiState(
@@ -44,6 +48,10 @@ data class OirepaivakirjaUiState(
     val oireet: List<OireRivi> = emptyList(),
     /** The days of [kuukausi] with an active symptom (•). */
     val oirePaivat: Set<LocalDate> = emptySet(),
+    /** The symptom whose deletion waits for the user's confirmation (the dialog is open). */
+    val poistettava: OireRivi? = null,
+    /** The result of the last deletion, shown once as a snackbar; null when nothing to show. */
+    val poistonTulos: PoistonTulos? = null,
     val loading: Boolean = true,
     /** The diary couldn't be read (e.g. database unavailable). */
     val loadError: Boolean = false
@@ -51,6 +59,9 @@ data class OirepaivakirjaUiState(
     /** The calendar's rows, Monday first (see [kuukaudenViikot]). */
     val viikot: List<List<LocalDate?>> get() = kuukaudenViikot(kuukausi)
 }
+
+/** A deletion's result to show: a new [id] for each one, so two in a row are two messages. */
+data class PoistonTulos(val id: Long, val onnistui: Boolean)
 
 /**
  * The weeks of [kuukausi] as calendar rows, Monday to Sunday (Finnish weeks start on Monday).
@@ -75,10 +86,13 @@ private const val DAYS_IN_WEEK = 7
 class OirepaivakirjaViewModel(
     private val handle: SavedStateHandle,
     private val repository: PaivakirjaRepository,
+    private val oireRepository: OireRepository,
     private val clock: Clock
 ) : ViewModel() {
     private val nyt = MutableStateFlow(ZonedDateTime.now(clock))
     private val refreshes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val poistonTulos = MutableStateFlow<PoistonTulos?>(null)
+    private var poistoja = 0L
 
     private val valinta: Flow<Valinta> = combine(
         nyt,
@@ -123,9 +137,14 @@ class OirepaivakirjaViewModel(
         }
         .onStart<Tiedot?> { emit(null) }
 
-    val uiState: StateFlow<OirepaivakirjaUiState> = combine(valinta, tiedot) { v, data ->
+    val uiState: StateFlow<OirepaivakirjaUiState> = combine(
+        valinta,
+        tiedot,
+        handle.getStateFlow<Long?>(KEY_POISTETTAVA, null),
+        poistonTulos
+    ) { v, data, poistettava, tulos ->
         val base = v.toUiState()
-        when {
+        val state = when {
             data === VIRHE -> base.copy(loading = false, loadError = true)
             data == null || data.valittu != v.valittu || data.kuukausi != v.kuukausi -> base
             else -> base.copy(
@@ -136,6 +155,11 @@ class OirepaivakirjaViewModel(
                 loading = false
             )
         }
+        // The dialog shows only while its symptom is on the screen.
+        state.copy(
+            poistettava = state.oireet.find { it.merkintaId == poistettava },
+            poistonTulos = tulos
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), current().toUiState())
 
     /** Selects [day] and shows its month. */
@@ -157,6 +181,38 @@ class OirepaivakirjaViewModel(
     fun refresh() {
         nyt.value = ZonedDateTime.now(clock)
         refreshes.tryEmit(Unit)
+    }
+
+    /** "Poista" on a symptom row: asks for confirmation first (rule 7). */
+    fun requestDelete(rivi: OireRivi) {
+        handle[KEY_POISTETTAVA] = rivi.merkintaId
+    }
+
+    /** "Peruuta" or dismissing the dialog: nothing is deleted. */
+    fun cancelDelete() {
+        handle[KEY_POISTETTAVA] = null
+    }
+
+    /** "Poista" in the dialog: deletes the symptom for good (a hard delete). */
+    fun confirmDelete() {
+        val rivi = uiState.value.poistettava ?: return
+        handle[KEY_POISTETTAVA] = null
+        viewModelScope.launch {
+            val onnistui = try {
+                oireRepository.delete(rivi.merkinta)
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            poistonTulos.value = PoistonTulos(++poistoja, onnistui)
+        }
+    }
+
+    /** The screen has shown the result [id]; a newer one stays (as on Etusivu). */
+    fun poistonTulosShown(id: Long) {
+        poistonTulos.update { if (it?.id == id) null else it }
     }
 
     private fun showMonth(kuukausi: YearMonth) {
@@ -197,6 +253,7 @@ class OirepaivakirjaViewModel(
     companion object {
         private const val KEY_VALITTU = "valittu"
         private const val KEY_KUUKAUSI = "kuukausi"
+        private const val KEY_POISTETTAVA = "poistettava"
 
         /** Marks a failed read; compared by identity. */
         private val VIRHE =
@@ -215,6 +272,7 @@ class OirepaivakirjaViewModel(
                 OirepaivakirjaViewModel(
                     createSavedStateHandle(),
                     app.container.paivakirjaRepository,
+                    app.container.oireRepository,
                     app.container.clock
                 )
             }

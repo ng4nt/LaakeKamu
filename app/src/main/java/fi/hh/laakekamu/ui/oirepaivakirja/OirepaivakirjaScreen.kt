@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import fi.hh.laakekamu.R
+import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.ui.components.LkScreenTitle
 import fi.hh.laakekamu.ui.components.LkSmallButton
 import fi.hh.laakekamu.ui.format.formatDate
@@ -491,8 +492,8 @@ private fun OirepaivakirjaPreview() {
                 ),
                 valmiit = setOf(day.minusDays(2), day.minusDays(1), day),
                 oireet = listOf(
-                    OireRivi(1, "Huimaus", "A aamulääke"),
-                    OireRivi(2, "Vatsakipu", null)
+                    OireRivi(Oiremerkinta(1, "Huimaus", 1, day, null), "A aamulääke"),
+                    OireRivi(Oiremerkinta(2, "Vatsakipu", null, day, null), null)
                 ),
                 oirePaivat = setOf(day.minusDays(1), day),
                 loading = false

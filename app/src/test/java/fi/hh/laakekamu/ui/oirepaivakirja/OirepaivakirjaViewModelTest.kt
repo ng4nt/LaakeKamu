@@ -1,6 +1,7 @@
 package fi.hh.laakekamu.ui.oirepaivakirja
 
 import androidx.lifecycle.SavedStateHandle
+import fi.hh.laakekamu.data.OireRepository
 import fi.hh.laakekamu.data.PaivakirjaRepository
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
@@ -226,8 +227,81 @@ class OirepaivakirjaViewModelTest {
         repo.oireet.value = listOf(Oiremerkinta(1, "Huimaus", 1, yesterday, today))
 
         val state = vm.uiState.value
-        assertEquals(listOf(OireRivi(1, "Huimaus", "A aamulääke")), state.oireet)
+        assertEquals(listOf(OireRivi(repo.oireet.value[0], "A aamulääke")), state.oireet)
         assertEquals(setOf(yesterday, today), state.oirePaivat)
+    }
+
+    // Deleting a symptom: only after the confirmation
+
+    @Test
+    fun deleteRequest_opensTheDialog_andCancelDeletesNothing() = runTest {
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val vm = collecting(viewModel(repo))
+
+        vm.requestDelete(vm.uiState.value.oireet.single())
+        assertEquals(huimaus, vm.uiState.value.poistettava?.merkinta)
+        vm.cancelDelete()
+
+        assertEquals(null, vm.uiState.value.poistettava)
+        assertEquals(listOf(huimaus), repo.oireet.value)
+    }
+
+    @Test
+    fun confirm_deletesTheSymptom_andReportsItOnce() = runTest {
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val vm = collecting(viewModel(repo))
+        vm.requestDelete(vm.uiState.value.oireet.single())
+
+        vm.confirmDelete()
+
+        val state = vm.uiState.value
+        assertEquals(emptyList<Oiremerkinta>(), repo.oireet.value)
+        assertEquals(emptyList<OireRivi>(), state.oireet)
+        assertEquals(emptySet<LocalDate>(), state.oirePaivat)
+        assertEquals(null, state.poistettava)
+        assertTrue(state.poistonTulos!!.onnistui)
+        vm.poistonTulosShown(state.poistonTulos.id)
+        assertEquals(null, vm.uiState.value.poistonTulos)
+    }
+
+    @Test
+    fun aFailedDelete_keepsTheSymptom_andReportsTheFailure() = runTest {
+        val repo = FakeRepository(failDeletes = true)
+        repo.oireet.value = listOf(huimaus)
+        val vm = collecting(viewModel(repo))
+        vm.requestDelete(vm.uiState.value.oireet.single())
+
+        vm.confirmDelete()
+
+        assertFalse(vm.uiState.value.poistonTulos!!.onnistui)
+        assertEquals(1, vm.uiState.value.oireet.size)
+    }
+
+    @Test
+    fun confirmWithoutARequest_deletesNothing() = runTest {
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val vm = collecting(viewModel(repo))
+
+        vm.confirmDelete()
+
+        assertEquals(listOf(huimaus), repo.oireet.value)
+    }
+
+    @Test
+    fun thePendingDeletion_survivesProcessDeath() = runTest {
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val handle = SavedStateHandle()
+        val vm = collecting(viewModel(repo, handle))
+        vm.requestDelete(vm.uiState.value.oireet.single())
+
+        val saved = handle.keys().associateWith { handle.get<Any?>(it) }
+        val restored = collecting(viewModel(repo, SavedStateHandle(saved)))
+
+        assertEquals(huimaus, restored.uiState.value.poistettava?.merkinta)
     }
 
     @Test
@@ -242,16 +316,18 @@ class OirepaivakirjaViewModelTest {
         assertFalse(vm.uiState.value.loading)
     }
 
+    private val huimaus = Oiremerkinta(1, "Huimaus", null, yesterday, null)
+
     /** Keeps uiState subscribed for the rest of the test, as the screen does. */
     private fun TestScope.collecting(vm: OirepaivakirjaViewModel) = vm.also {
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { it.uiState.collect {} }
     }
 
     private fun viewModel(
-        repository: PaivakirjaRepository = FakeRepository(),
+        repository: FakeRepository = FakeRepository(),
         handle: SavedStateHandle = SavedStateHandle(),
         clock: Clock = MutableClock(today)
-    ) = OirepaivakirjaViewModel(handle, repository, clock)
+    ) = OirepaivakirjaViewModel(handle, repository, repository, clock)
 
     private fun laake(
         id: Long,
@@ -294,8 +370,10 @@ class OirepaivakirjaViewModelTest {
         laakkeet: List<Laake> = emptyList(),
         muistutukset: List<Muistutus> = emptyList(),
         otot: List<Laakkeenotto> = emptyList(),
-        private var failures: Int = 0
-    ) : PaivakirjaRepository {
+        private var failures: Int = 0,
+        private val failDeletes: Boolean = false
+    ) : PaivakirjaRepository,
+        OireRepository {
         val laakkeet = MutableStateFlow(laakkeet)
         val muistutukset = MutableStateFlow(muistutukset)
         val otot = MutableStateFlow(otot)
@@ -313,6 +391,19 @@ class OirepaivakirjaViewModelTest {
         override fun observeMuistutukset(): Flow<List<Muistutus>> = muistutukset
 
         override fun observeOireet(): Flow<List<Oiremerkinta>> = oireet
+
+        override fun observeAll(): Flow<List<Oiremerkinta>> = oireet
+
+        override fun observeAktiivisetLaakkeet(): Flow<List<Laake>> = laakkeet
+
+        override suspend fun add(merkinta: Oiremerkinta): Long = error("not used")
+
+        override suspend fun update(merkinta: Oiremerkinta) = error("not used")
+
+        override suspend fun delete(merkinta: Oiremerkinta) {
+            if (failDeletes) error("database unavailable")
+            oireet.value = oireet.value.filter { it.merkintaId != merkinta.merkintaId }
+        }
 
         override fun observeOtot(alku: LocalDate, loppu: LocalDate): Flow<List<Laakkeenotto>> {
             if (alku != loppu) lastMonthRead = YearMonth.from(alku)

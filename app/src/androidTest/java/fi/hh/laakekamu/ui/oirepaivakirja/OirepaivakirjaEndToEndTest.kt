@@ -22,6 +22,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import fi.hh.laakekamu.data.AppDatabase
+import fi.hh.laakekamu.data.OireRepository
 import fi.hh.laakekamu.data.RoomAnnosRepository
 import fi.hh.laakekamu.data.RoomLaakeRepository
 import fi.hh.laakekamu.data.RoomPaivakirjaRepository
@@ -71,8 +72,12 @@ class OirepaivakirjaEndToEndTest {
         val lisaa =
             LisaaLaakeViewModel(SavedStateHandle(), RoomLaakeRepository({ db }, clock), clock)
         val etusivu = EtusivuViewModel(RoomAnnosRepository({ db }, clock), clock)
-        val paivakirja =
-            OirepaivakirjaViewModel(SavedStateHandle(), RoomPaivakirjaRepository { db }, clock)
+        val paivakirja = OirepaivakirjaViewModel(
+            SavedStateHandle(),
+            RoomPaivakirjaRepository { db },
+            OireRepository { db },
+            clock
+        )
         compose.setContent {
             LaakeKamuTheme {
                 when (naytto) {

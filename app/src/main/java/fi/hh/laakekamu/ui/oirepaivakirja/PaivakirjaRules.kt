@@ -62,7 +62,10 @@ fun valmiitPaivat(
 }
 
 /** A symptom on the selected day; [sivuoire] is the linked medication's name, if any. */
-data class OireRivi(val merkintaId: Long, val kuvaus: String, val sivuoire: String?)
+data class OireRivi(val merkinta: Oiremerkinta, val sivuoire: String?) {
+    val merkintaId: Long get() = merkinta.merkintaId
+    val kuvaus: String get() = merkinta.kuvaus
+}
 
 /**
  * The symptoms active on [paiva] (see [isActiveOn]), newest start first, each with its side
@@ -81,7 +84,7 @@ fun oireetPaivalle(
     return oireet
         .filter { it.isActiveOn(paiva, tanaan) }
         .sortedWith(newestFirst)
-        .map { OireRivi(it.merkintaId, it.kuvaus, it.laakeId?.let(nimet::get)) }
+        .map { OireRivi(it, it.laakeId?.let(nimet::get)) }
 }
 
 /** The days of [kuukausi] with at least one active symptom (the • marker). */
