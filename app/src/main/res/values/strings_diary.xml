@@ -31,4 +31,12 @@
     <string name="virhe_laakkeet_lataus">Lääkkeitä ei voitu ladata. Oireen voi silti tallentaa.</string>
     <string name="virhe_oire_tallennus">Oireen tallennus epäonnistui. Yritä uudelleen.</string>
     <string name="oire_tallennettu">Oire tallennettu</string>
+
+    <!-- Deleting a symptom: the row's button and the confirmation -->
+    <string name="poista">Poista</string>
+    <string name="poista_oire_kuvaus">Poista oire %1$s</string>
+    <string name="poista_oire_otsikko">Poistetaanko oire?</string>
+    <string name="poista_oire_teksti">Oire \"%1$s\" (alkanut %2$s) poistetaan pysyvästi oirepäiväkirjasta. Tätä ei voi perua.</string>
+    <string name="oire_poistettu">Oire poistettu</string>
+    <string name="virhe_oire_poisto">Oiretta ei voitu poistaa. Yritä uudelleen.</string>
 </resources>

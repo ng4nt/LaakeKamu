@@ -107,7 +107,8 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                 OirepaivakirjaScreen(
                     onAdd = { day ->
                         navController.navigate(FormRoute.lisaaOire(day)) { launchSingleTop = true }
-                    }
+                    },
+                    snackbarHostState = snackbarHostState
                 )
             }
             composable(

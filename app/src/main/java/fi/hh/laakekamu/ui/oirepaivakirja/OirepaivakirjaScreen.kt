@@ -1,5 +1,6 @@
 package fi.hh.laakekamu.ui.oirepaivakirja
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,10 +23,14 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +52,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -61,6 +67,7 @@ import fi.hh.laakekamu.ui.format.formatTime
 import fi.hh.laakekamu.ui.format.formatWeekday
 import fi.hh.laakekamu.ui.format.formatWeekdayShort
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
+import fi.hh.laakekamu.ui.theme.LkDanger
 import fi.hh.laakekamu.ui.theme.LkMuted
 import fi.hh.laakekamu.ui.theme.LkPrimary
 import java.time.LocalDate
@@ -125,6 +132,7 @@ private val BUTTONS_BOTTOM = 56.dp
 @Composable
 fun OirepaivakirjaScreen(
     onAdd: (LocalDate) -> Unit,
+    snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier,
     viewModel: OirepaivakirjaViewModel = viewModel(factory = OirepaivakirjaViewModel.Factory)
 ) {
@@ -139,7 +147,79 @@ fun OirepaivakirjaScreen(
         onNext = viewModel::nextMonth,
         onSelect = viewModel::selectDay,
         onAdd = { onAdd(state.valittu) },
+        onDelete = viewModel::requestDelete,
         modifier = modifier
+    )
+    state.poistettava?.let { rivi ->
+        PoistaOireDialog(
+            rivi = rivi,
+            onConfirm = viewModel::confirmDelete,
+            onDismiss = viewModel::cancelDelete
+        )
+    }
+
+    // The deletion's result, shown once; kept for the recreated screen if the activity is
+    // only rotating (as on Etusivu).
+    val tulos = state.poistonTulos
+    val poistettu = stringResource(R.string.oire_poistettu)
+    val virhe = stringResource(R.string.virhe_oire_poisto)
+    val activity = LocalActivity.current
+    LaunchedEffect(tulos?.id) {
+        if (tulos != null) {
+            try {
+                snackbarHostState.showSnackbar(if (tulos.onnistui) poistettu else virhe)
+            } finally {
+                if (activity?.isChangingConfigurations != true) {
+                    viewModel.poistonTulosShown(tulos.id)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The confirmation before a symptom is deleted for good (rule 7): "Poista" in danger,
+ * "Peruuta" in primary, styled like the start-over dialog.
+ */
+@Composable
+private fun PoistaOireDialog(rivi: OireRivi, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = stringResource(R.string.poista_oire_otsikko),
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(
+                text = stringResource(
+                    R.string.poista_oire_teksti,
+                    rivi.kuvaus,
+                    formatDayMonth(rivi.merkinta.aloituspv)
+                ),
+                fontSize = 18.sp
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = stringResource(R.string.poista),
+                    color = LkDanger,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = stringResource(R.string.peruuta),
+                    color = LkPrimary,
+                    style = MaterialTheme.typography.labelLarge
+                )
+            }
+        }
     )
 }
 
@@ -150,6 +230,7 @@ private fun OirepaivakirjaContent(
     onNext: () -> Unit,
     onSelect: (LocalDate) -> Unit,
     onAdd: () -> Unit,
+    onDelete: (OireRivi) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier.fillMaxSize()) {
@@ -161,7 +242,7 @@ private fun OirepaivakirjaContent(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 24.dp)
         ) {
-            Paivakirja(state, onPrevious, onNext, onSelect)
+            Paivakirja(state, onPrevious, onNext, onSelect, onDelete)
         }
         Row(
             modifier = Modifier
@@ -180,7 +261,8 @@ private fun Paivakirja(
     state: OirepaivakirjaUiState,
     onPrevious: () -> Unit,
     onNext: () -> Unit,
-    onSelect: (LocalDate) -> Unit
+    onSelect: (LocalDate) -> Unit,
+    onDelete: (OireRivi) -> Unit
 ) {
     Column {
         LkScreenTitle(
@@ -207,7 +289,7 @@ private fun Paivakirja(
                 else -> {
                     Otetut(state.valittu, state.tanaan, state.otetut)
                     Spacer(Modifier.height(LISTS_GAP))
-                    Oireet(state.oireet)
+                    Oireet(state.oireet, onDelete)
                 }
             }
         }
@@ -250,7 +332,7 @@ private fun Otetut(valittu: LocalDate, tanaan: LocalDate, otetut: List<OtettuRiv
 
 /** "Oireet" (Bold) and the selected day's symptoms, each with "sivuoire: X" when linked. */
 @Composable
-private fun Oireet(oireet: List<OireRivi>) {
+private fun Oireet(oireet: List<OireRivi>, onDelete: (OireRivi) -> Unit) {
     Text(
         text = stringResource(R.string.oireet_otsikko),
         style = MaterialTheme.typography.titleMedium,
@@ -266,29 +348,54 @@ private fun Oireet(oireet: List<OireRivi>) {
     oireet.forEach { oire ->
         Luettelorivi(
             text = AnnotatedString(oire.kuvaus),
-            lisa = oire.sivuoire?.let { stringResource(R.string.sivuoire_rivi, it) }
+            lisa = oire.sivuoire?.let { stringResource(R.string.sivuoire_rivi, it) },
+            action = {
+                // The edit selector is cut (out of scope); delete is on the row.
+                val kuvaus = stringResource(R.string.poista_oire_kuvaus, oire.kuvaus)
+                TextButton(
+                    onClick = { onDelete(oire) },
+                    modifier = Modifier.semantics { contentDescription = kuvaus }
+                ) {
+                    Text(
+                        text = stringResource(R.string.poista),
+                        color = LkDanger,
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
         )
     }
 }
 
 /**
  * A bulleted 20sp line with an optional 18sp [lisa] line under it (as Lääkelista's label),
- * read by TalkBack as one item without the bullet.
+ * read by TalkBack as one item without the bullet, and an optional [action] at its end
+ * that TalkBack reaches separately.
  */
 @Composable
-private fun Luettelorivi(text: AnnotatedString, lisa: String? = null) {
-    Row(Modifier.padding(start = BULLET_INDENT).semantics(mergeDescendants = true) {}) {
-        Text(
-            text = "•",
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.width(BULLET_WIDTH).clearAndSetSemantics {}
-        )
-        Column {
-            Text(text = text, style = MaterialTheme.typography.bodyLarge)
-            if (lisa != null) {
-                Text(text = lisa, style = MaterialTheme.typography.bodyMedium, color = LkMuted)
+private fun Luettelorivi(
+    text: AnnotatedString,
+    lisa: String? = null,
+    action: (@Composable () -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = BULLET_INDENT),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.width(BULLET_WIDTH).clearAndSetSemantics {}
+            )
+            Column {
+                Text(text = text, style = MaterialTheme.typography.bodyLarge)
+                if (lisa != null) {
+                    Text(text = lisa, style = MaterialTheme.typography.bodyMedium, color = LkMuted)
+                }
             }
         }
+        action?.invoke()
     }
 }
 
@@ -501,7 +608,8 @@ private fun OirepaivakirjaPreview() {
             onPrevious = {},
             onNext = {},
             onSelect = {},
-            onAdd = {}
+            onAdd = {},
+            onDelete = {}
         )
     }
 }
