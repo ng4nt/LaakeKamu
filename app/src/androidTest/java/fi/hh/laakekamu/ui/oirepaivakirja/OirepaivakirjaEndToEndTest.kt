@@ -1,5 +1,7 @@
 package fi.hh.laakekamu.ui.oirepaivakirja
 
+import android.Manifest
+import android.os.Build
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import fi.hh.laakekamu.data.AppDatabase
 import fi.hh.laakekamu.data.OireRepository
 import fi.hh.laakekamu.data.RoomAnnosRepository
@@ -65,6 +68,15 @@ class OirepaivakirjaEndToEndTest {
 
     @Before
     fun setUp() {
+        // Saving a daily medication asks for notifications on Android 13+. The system
+        // dialog would cover the app and hide its Compose hierarchy, so grant it first.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            instrumentation.uiAutomation.grantRuntimePermission(
+                instrumentation.targetContext.packageName,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+        }
         db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
             AppDatabase::class.java
