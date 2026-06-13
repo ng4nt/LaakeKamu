@@ -3,6 +3,7 @@ package fi.hh.laakekamu.data
 import android.content.Context
 import android.util.Log
 import fi.hh.laakekamu.reminders.AjastavaLaakeRepository
+import fi.hh.laakekamu.reminders.KuittaavaAnnosRepository
 import fi.hh.laakekamu.reminders.MuistutusScheduler
 import java.security.GeneralSecurityException
 import java.time.Clock
@@ -137,7 +138,10 @@ class AppContainer(
         }
     }
 
-    val annosRepository: AnnosRepository by lazy { RoomAnnosRepository(::database, clock) }
+    // A tick in the app also removes that dose's notification.
+    val annosRepository: AnnosRepository by lazy {
+        KuittaavaAnnosRepository(RoomAnnosRepository(::database, clock), appContext)
+    }
 
     val oireRepository: OireRepository by lazy { OireRepository(::database) }
 
