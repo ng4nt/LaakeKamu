@@ -4,16 +4,19 @@ import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import android.os.Build
 import android.util.Log
 import fi.hh.laakekamu.data.AppDatabase
 import fi.hh.laakekamu.data.dao.MuistutettavaAnnos
+import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.domain.MuistutusAikataulu
 import fi.hh.laakekamu.domain.aikaToLocalTime
 import fi.hh.laakekamu.domain.isDueOn
 import fi.hh.laakekamu.domain.nextSlotTriggers
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZonedDateTime
 import kotlin.coroutines.cancellation.CancellationException
@@ -95,12 +98,99 @@ class MuistutusScheduler(
             }
             found
         }
-        val due = inSlot.filter {
+        postUntaken(db, inSlot, paiva)
+    }
+
+    /**
+     * "Otettu" on a notification: ticks the dose of [muistutusId] on [paiva] if it
+     * is still due then. A medication deleted or a time removed after the notification was
+     * posted leaves nothing to tick. The insert is IGNORE, so a double tap or the
+     * in-app tick can't fail, and a reminder deleted a moment ago (the foreign key)
+     * is caught.
+     */
+    suspend fun otettu(muistutusId: Long, paiva: LocalDate) {
+        val db = database()
+        val annos = dueDose(db, muistutusId, paiva) ?: return
+        try {
+            db.laakkeenottoDao().insert(
+                Laakkeenotto(
+                    muistutusId = annos.muistutusId,
+                    paivamaara = paiva,
+                    ottoaika = Instant.now(clock)
+                )
+            )
+        } catch (e: SQLiteConstraintException) {
+            Log.w(TAG, "Reminder $muistutusId was deleted before Otettu", e)
+        }
+    }
+
+    /**
+     * "Muistuta 10 min päästä": one alarm 10 minutes from now for this dose
+     * (request code 10 000 + id). `setExactAndAllowWhileIdle` may be a little late in Doze,
+     * which is fine for a repeat.
+     */
+    suspend fun snooze(muistutusId: Long, paiva: LocalDate) {
+        val at = Instant.now(clock).plusSeconds(SNOOZE_MINUTES * SECONDS_PER_MINUTE)
+        withContext(ioDispatcher) {
+            val operation = snoozeIntent(muistutusId, paiva)
+            if (canScheduleExact()) {
+                alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    at.toEpochMilli(),
+                    operation
+                )
+            } else {
+                alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    at.toEpochMilli(),
+                    operation
+                )
+            }
+        }
+    }
+
+    /** The snooze of [muistutusId] fired: posts the dose again if it is still due and untaken. */
+    suspend fun snoozeFired(muistutusId: Long, paiva: LocalDate) {
+        val db = database()
+        val annos = dueDose(db, muistutusId, paiva) ?: return
+        postUntaken(db, listOf(annos), paiva)
+    }
+
+    /** The reminder's dose of [paiva], if its medication is active and daily and it's due then. */
+    private suspend fun dueDose(
+        db: AppDatabase,
+        muistutusId: Long,
+        paiva: LocalDate
+    ): MuistutettavaAnnos? = db.muistutusDao().getMuistutettavat(paiva)
+        .firstOrNull { it.muistutusId == muistutusId }
+        ?.takeIf { isDueOn(paiva, it.voimassaAlkaen, it.voimassaAsti, it.aloituspv, it.lopetuspv) }
+
+    /** Posts each of [annokset] that is due on [paiva] and not taken. */
+    private suspend fun postUntaken(
+        db: AppDatabase,
+        annokset: List<MuistutettavaAnnos>,
+        paiva: LocalDate
+    ) {
+        val due = annokset.filter {
             isDueOn(paiva, it.voimassaAlkaen, it.voimassaAsti, it.aloituspv, it.lopetuspv)
         }
         if (due.isEmpty()) return
         val taken = db.laakkeenottoDao().takenOn(paiva, due.map { it.muistutusId }).toSet()
-        due.filter { it.muistutusId !in taken }.forEach { Ilmoitukset.naytaAnnos(appContext, it) }
+        due.filter { it.muistutusId !in taken }
+            .forEach { Ilmoitukset.naytaAnnos(appContext, it, paiva) }
+    }
+
+    private fun snoozeIntent(muistutusId: Long, paiva: LocalDate): PendingIntent {
+        val intent = Intent(appContext, AlarmReceiver::class.java)
+            .setData(Uri.parse("laakekamu://snooze/$muistutusId"))
+            .putExtra(NotificationActionReceiver.EXTRA_MUISTUTUS_ID, muistutusId)
+            .putExtra(AlarmReceiver.EXTRA_PAIVA, paiva.toEpochDay())
+        return PendingIntent.getBroadcast(
+            appContext,
+            SNOOZE_CODE_BASE + muistutusId.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
     }
 
     private fun setSlot(aika: Int, at: ZonedDateTime) {
@@ -150,5 +240,8 @@ class MuistutusScheduler(
         const val TAG = "MuistutusScheduler"
         const val PREFS = "muistutukset"
         const val KEY_SLOTS = "slots"
+        const val SNOOZE_CODE_BASE = 10_000
+        const val SNOOZE_MINUTES = 10L
+        const val SECONDS_PER_MINUTE = 60L
     }
 }

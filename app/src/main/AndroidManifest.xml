@@ -36,9 +36,13 @@
             </intent-filter>
         </activity>
 
-        <!-- Reached only through the scheduler's explicit PendingIntents: no intent-filter. -->
+        <!-- Reached only through our explicit PendingIntents (alarms, notification buttons):
+             no intent-filter. -->
         <receiver
             android:name=".reminders.AlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminders.NotificationActionReceiver"
             android:exported="false" />
     </application>
 

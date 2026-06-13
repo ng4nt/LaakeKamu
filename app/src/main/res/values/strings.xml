@@ -110,6 +110,8 @@
     <string name="ilmoitus_annos">%1$s %2$s %3$s · klo %4$s</string>
     <!-- Lock screen version: no medication data -->
     <string name="ilmoitus_julkinen">Sinulla on lääkemuistutus</string>
+    <string name="ilmoitus_otettu">Otettu</string>
+    <string name="ilmoitus_muistuta">Muistuta 10 min päästä</string>
     <string name="ilmoitus_huomio">LääkeKamu tarvitsee huomiota</string>
     <string name="ilmoitus_avaa_sovellus">Avaa sovellus</string>
 </resources>

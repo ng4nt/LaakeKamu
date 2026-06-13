@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
@@ -16,6 +17,7 @@ import fi.hh.laakekamu.MainActivity
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.data.dao.MuistutettavaAnnos
 import fi.hh.laakekamu.ui.format.formatTime
+import java.time.LocalDate
 
 /** The dose reminders' notification channel and notifications. */
 object Ilmoitukset {
@@ -47,10 +49,11 @@ object Ilmoitukset {
             PackageManager.PERMISSION_GRANTED
 
     /**
-     * "Aika ottaa lääke" / "A aamulääke 5 mg · klo 8.00", one per medication (id = its
-     * reminder's id). The lock screen shows only the public version without the name.
+     * "Aika ottaa lääke" / "A aamulääke 5 mg · klo 8.00" for the dose of [paiva], one per
+     * medication (id = its reminder's id), with "Otettu" and "Muistuta 10 min päästä"
+     *. The lock screen shows only the public version without the name.
      */
-    fun naytaAnnos(context: Context, annos: MuistutettavaAnnos) {
+    fun naytaAnnos(context: Context, annos: MuistutettavaAnnos, paiva: LocalDate) {
         val text = context.getString(
             R.string.ilmoitus_annos,
             annos.nimi,
@@ -63,8 +66,43 @@ object Ilmoitukset {
             .setContentText(text)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(julkinen(context))
+            .addAction(
+                0,
+                context.getString(R.string.ilmoitus_otettu),
+                toiminto(context, annos.muistutusId, paiva, NotificationActionReceiver.OTETTU)
+            )
+            .addAction(
+                0,
+                context.getString(R.string.ilmoitus_muistuta),
+                toiminto(context, annos.muistutusId, paiva, NotificationActionReceiver.MUISTUTA)
+            )
             .build()
         notify(context, annos.muistutusId.toInt(), notification)
+    }
+
+    /** Removes the reminder's notification: its dose was ticked or snoozed. */
+    fun poista(context: Context, muistutusId: Long) {
+        NotificationManagerCompat.from(context).cancel(muistutusId.toInt())
+    }
+
+    /**
+     * A button's explicit PendingIntent: the data URI
+     * `laakekamu://annos/{id}/{day}/{action}` only gives each one its identity; there's no
+     * intent-filter for it.
+     */
+    private fun toiminto(
+        context: Context,
+        muistutusId: Long,
+        paiva: LocalDate,
+        action: String
+    ): PendingIntent {
+        val nimi = action.substringAfterLast('.')
+        val intent = Intent(context, NotificationActionReceiver::class.java)
+            .setAction(action)
+            .setData(Uri.parse("laakekamu://annos/$muistutusId/$paiva/$nimi"))
+            .putExtra(NotificationActionReceiver.EXTRA_MUISTUTUS_ID, muistutusId)
+            .putExtra(AlarmReceiver.EXTRA_PAIVA, paiva.toEpochDay())
+        return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
     }
 
     /**

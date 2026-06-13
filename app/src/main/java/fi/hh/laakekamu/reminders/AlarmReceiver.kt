@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 /**
- * A reminder slot's alarm fired. Reached only through the scheduler's
+ * A reminder slot's alarm or a dose's snooze fired. Reached only through the scheduler's
  * explicit PendingIntent (not exported, no intent-filter). The work runs after
  * `goAsync()` in its own scope and must finish within 8 s; if the database can't be opened,
  * one generic notification asks the user to open the app, with no medication
@@ -26,28 +26,36 @@ import kotlinx.coroutines.withTimeout
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val aika = intent.getIntExtra(EXTRA_AIKA, -1)
+        val muistutusId = intent.getLongExtra(NotificationActionReceiver.EXTRA_MUISTUTUS_ID, -1L)
         val paiva = intent.getLongExtra(EXTRA_PAIVA, NO_DAY)
-        if (!isValidReminderTime(aika) || paiva == NO_DAY) return
+        val snooze = muistutusId > 0
+        if ((!snooze && !isValidReminderTime(aika)) || paiva == NO_DAY) return
+        val mika = if (snooze) "Snooze $muistutusId" else "Slot $aika"
         val container = (context.applicationContext as LaakeKamuApp).container
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + container.ioDispatcher).launch {
             val start = System.nanoTime()
             try {
                 withTimeout(TIMEOUT_MS) {
-                    container.scheduler.slotFired(aika, LocalDate.ofEpochDay(paiva))
+                    val day = LocalDate.ofEpochDay(paiva)
+                    if (snooze) {
+                        container.scheduler.snoozeFired(muistutusId, day)
+                    } else {
+                        container.scheduler.slotFired(aika, day)
+                    }
                 }
             } catch (e: TietokantaEiSaatavillaException) {
                 Ilmoitukset.naytaTietokantaVirhe(context)
             } catch (e: TimeoutCancellationException) {
-                Log.e(TAG, "Slot $aika took too long", e)
+                Log.e(TAG, "$mika took too long", e)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "Slot $aika failed", e)
+                Log.e(TAG, "$mika failed", e)
             } finally {
                 if (BuildConfig.DEBUG) {
                     val ms = (System.nanoTime() - start) / NANOS_PER_MS
-                    Log.d(TAG, "Slot $aika handled in $ms ms")
+                    Log.d(TAG, "$mika handled in $ms ms")
                 }
                 pending.finish()
             }
