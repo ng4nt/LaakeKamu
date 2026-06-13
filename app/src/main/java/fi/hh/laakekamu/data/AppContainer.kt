@@ -141,6 +141,8 @@ class AppContainer(
 
     val oireRepository: OireRepository by lazy { OireRepository(::database) }
 
+    val paivakirjaRepository: PaivakirjaRepository by lazy { RoomPaivakirjaRepository(::database) }
+
     private companion object {
         const val TAG = "AppContainer"
     }

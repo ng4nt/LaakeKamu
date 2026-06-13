@@ -11,18 +11,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.etusivu.EtusivuScreen
 import fi.hh.laakekamu.ui.laakelista.LaakelistaScreen
 import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeScreen
+import fi.hh.laakekamu.ui.lisaaoire.LisaaOireScreen
+import fi.hh.laakekamu.ui.lisaaoire.LisaaOireViewModel
 import fi.hh.laakekamu.ui.navigation.BottomNavBar
 import fi.hh.laakekamu.ui.navigation.FormRoute
 import fi.hh.laakekamu.ui.navigation.MainDestination
@@ -92,7 +97,35 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                     snackbarHostState = snackbarHostState
                 )
             }
-            composable(MainDestination.OIREPAIVAKIRJA.route) { OirepaivakirjaScreen() }
+            composable(MainDestination.OIREPAIVAKIRJA.route) { entry ->
+                SavedFlagSnackbar(
+                    entry.savedStateHandle,
+                    KEY_OIRE_TALLENNETTU,
+                    stringResource(R.string.oire_tallennettu),
+                    snackbarHostState
+                )
+                OirepaivakirjaScreen(
+                    onAdd = { day ->
+                        navController.navigate(FormRoute.lisaaOire(day)) { launchSingleTop = true }
+                    },
+                    snackbarHostState = snackbarHostState
+                )
+            }
+            composable(
+                FormRoute.LISAA_OIRE,
+                arguments = listOf(
+                    navArgument(LisaaOireViewModel.ARG_ALKAA) { type = NavType.LongType }
+                )
+            ) {
+                LisaaOireScreen(
+                    onClose = dropUnlessResumed { navController.popBackStack() },
+                    onSaved = {
+                        navController.popBackStack()
+                        navController.getBackStackEntry(MainDestination.OIREPAIVAKIRJA.route)
+                            .savedStateHandle[KEY_OIRE_TALLENNETTU] = true
+                    }
+                )
+            }
             composable(FormRoute.LISAA_LAAKE) {
                 LisaaLaakeScreen(
                     // A double tap mustn't pop the list too.
@@ -112,6 +145,33 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
 
 /** Lääkelista's saved-state flag: show "Lääke lisätty". */
 private const val KEY_LAAKE_LISATTY = "laakeLisatty"
+
+/** Oirepäiväkirja's saved-state flag: show "Oire tallennettu". */
+private const val KEY_OIRE_TALLENNETTU = "oireTallennettu"
+
+/**
+ * Shows [message] once when the [key] flag in [handle] is set, as Lääkelista does for "Lääke
+ * lisätty": the flag survives rotation and is cleared once shown.
+ */
+@Composable
+private fun SavedFlagSnackbar(
+    handle: SavedStateHandle,
+    key: String,
+    message: String,
+    snackbarHostState: SnackbarHostState
+) {
+    val flag by handle.getStateFlow(key, false).collectAsStateWithLifecycle()
+    val activity = LocalActivity.current
+    LaunchedEffect(flag) {
+        if (flag) {
+            try {
+                snackbarHostState.showSnackbar(message)
+            } finally {
+                if (activity?.isChangingConfigurations != true) handle[key] = false
+            }
+        }
+    }
+}
 
 /**
  * Standard bottom-bar navigation: one copy of each tab on the back stack, back from a tab

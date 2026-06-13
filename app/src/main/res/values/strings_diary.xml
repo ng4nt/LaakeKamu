@@ -1,0 +1,42 @@
+<resources>
+    <!-- Oirepäiväkirja: calendar arrows, read by TalkBack -->
+    <string name="edellinen_kuukausi">Edellinen kuukausi</string>
+    <string name="seuraava_kuukausi">Seuraava kuukausi</string>
+    <!-- A complete day for TalkBack: "torstai 18.12.2025, kaikki lääkkeet otettu" -->
+    <string name="paiva_valmis">%1$s, kaikki lääkkeet otettu</string>
+
+    <!-- The selected day's taken doses: "A aamulääke 5 mg (klo 8.00)" -->
+    <string name="otetut_tanaan">Tänään otetut lääkkeet</string>
+    <string name="otetut_paivana">%1$s otetut lääkkeet</string>
+    <string name="otettu_klo">(klo %1$s)</string>
+    <string name="ei_otettuja">Ei otettuja lääkkeitä</string>
+    <!-- The selected day's symptoms: "Huimaus" / "sivuoire: A aamulääke" -->
+    <string name="oireet_otsikko">Oireet</string>
+    <string name="sivuoire_rivi">sivuoire: %1$s</string>
+    <string name="ei_oireita">Ei kirjattuja oireita</string>
+    <!-- A day with a symptom for TalkBack: "torstai 18.12.2025, oire kirjattu" -->
+    <string name="paiva_oire">%1$s, oire kirjattu</string>
+    <string name="virhe_paivakirja">Päiväkirjaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
+    <!-- Lisää uusi oire -->
+    <string name="oire_label">Oire</string>
+    <string name="oire_placeholder">Kuvaile oire</string>
+    <string name="sivuoire_label">Onko jonkun lääkkeen sivuoire?</string>
+    <string name="sivuoire_placeholder">Valitse lääke</string>
+    <string name="ei_sivuoire">Ei sivuoire</string>
+    <string name="alkamispaiva_label">Oireen alkamispäivä</string>
+    <string name="loppumispaiva_label">Oireen loppumispäivä</string>
+    <string name="virhe_oire_puuttuu">Oire puuttuu.</string>
+    <string name="virhe_loppu_ennen_alkua">Loppumispäivä ei voi olla ennen alkamispäivää.</string>
+    <string name="virhe_laakkeet_lataus">Lääkkeitä ei voitu ladata. Oireen voi silti tallentaa.</string>
+    <string name="virhe_oire_tallennus">Oireen tallennus epäonnistui. Yritä uudelleen.</string>
+    <string name="oire_tallennettu">Oire tallennettu</string>
+
+    <!-- Deleting a symptom: the row's button and the confirmation -->
+    <string name="poista">Poista</string>
+    <string name="poista_oire_kuvaus">Poista oire %1$s</string>
+    <string name="poista_oire_otsikko">Poistetaanko oire?</string>
+    <string name="poista_oire_teksti">Oire \"%1$s\" (alkanut %2$s) poistetaan pysyvästi oirepäiväkirjasta. Tätä ei voi perua.</string>
+    <string name="oire_poistettu">Oire poistettu</string>
+    <string name="virhe_oire_poisto">Oiretta ei voitu poistaa. Yritä uudelleen.</string>
+</resources>
