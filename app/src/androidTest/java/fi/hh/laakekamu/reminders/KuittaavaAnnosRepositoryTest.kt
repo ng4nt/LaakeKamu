@@ -12,9 +12,11 @@ import fi.hh.laakekamu.data.dao.MuistutettavaAnnos
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Muistutus
 import java.time.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -62,6 +64,17 @@ class KuittaavaAnnosRepositoryTest {
 
     private fun shownIds() = notifications.activeNotifications.map { it.id }.toSet()
 
+    /**
+     * The shown ids once they are [expected], or after 2 s. Posting and cancelling reach the
+     * notification service asynchronously, so a read right after can still see the old set.
+     */
+    private suspend fun shownIdsWhen(expected: Set<Int>): Set<Int> {
+        withTimeoutOrNull(WAIT_MS) {
+            while (shownIds() != expected) delay(POLL_MS)
+        }
+        return shownIds()
+    }
+
     @Test
     fun tickingInTheApp_removesThatDosesNotificationOnly() = runBlocking {
         post(101)
@@ -69,10 +82,15 @@ class KuittaavaAnnosRepositoryTest {
         val repository = KuittaavaAnnosRepository(inner, context)
 
         repository.setOtettu(101, today, otettu = true)
-        assertEquals(setOf(102), shownIds())
+        assertEquals(setOf(102), shownIdsWhen(setOf(102)))
 
         repository.setOtettu(102, today, otettu = false)
-        assertEquals(setOf(102), shownIds())
+        assertEquals(setOf(102), shownIdsWhen(setOf(102)))
         assertEquals(listOf(101L to true, 102L to false), ticks)
+    }
+
+    private companion object {
+        const val WAIT_MS = 2_000L
+        const val POLL_MS = 50L
     }
 }
