@@ -52,8 +52,14 @@ object Ilmoitukset {
      * "Aika ottaa lääke" / "A aamulääke 5 mg · klo 8.00" for the dose of [paiva], one per
      * medication (id = its reminder's id), with "Otettu" and "Muistuta 10 min päästä"
      *. The lock screen shows only the public version without the name.
+     * A dose missed while the phone was off ([myohassa]) is titled "Myöhässä".
      */
-    fun naytaAnnos(context: Context, annos: MuistutettavaAnnos, paiva: LocalDate) {
+    fun naytaAnnos(
+        context: Context,
+        annos: MuistutettavaAnnos,
+        paiva: LocalDate,
+        myohassa: Boolean = false
+    ) {
         val text = context.getString(
             R.string.ilmoitus_annos,
             annos.nimi,
@@ -62,7 +68,11 @@ object Ilmoitukset {
             formatTime(annos.aika)
         )
         val notification = builder(context)
-            .setContentTitle(context.getString(R.string.ilmoitus_otsikko))
+            .setContentTitle(
+                context.getString(
+                    if (myohassa) R.string.ilmoitus_myohassa else R.string.ilmoitus_otsikko
+                )
+            )
             .setContentText(text)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(julkinen(context))
@@ -83,6 +93,11 @@ object Ilmoitukset {
     /** Removes the reminder's notification: its dose was ticked or snoozed. */
     fun poista(context: Context, muistutusId: Long) {
         NotificationManagerCompat.from(context).cancel(muistutusId.toInt())
+    }
+
+    /** Removes every notification: "Aloita alusta" deleted the data they are about. */
+    fun poistaKaikki(context: Context) {
+        NotificationManagerCompat.from(context).cancelAll()
     }
 
     /**

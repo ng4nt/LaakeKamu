@@ -12,8 +12,10 @@ import fi.hh.laakekamu.data.AppDatabase
 import fi.hh.laakekamu.data.dao.MuistutettavaAnnos
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.domain.MuistutusAikataulu
+import fi.hh.laakekamu.domain.TakenDose
 import fi.hh.laakekamu.domain.aikaToLocalTime
 import fi.hh.laakekamu.domain.isDueOn
+import fi.hh.laakekamu.domain.lateDoses
 import fi.hh.laakekamu.domain.nextSlotTriggers
 import java.time.Clock
 import java.time.Instant
@@ -154,6 +156,34 @@ class MuistutusScheduler(
         val db = database()
         val annos = dueDose(db, muistutusId, paiva) ?: return
         postUntaken(db, listOf(annos), paiva)
+    }
+
+    /**
+     * After BOOT_COMPLETED: posts "Myöhässä" once for each dose missed while the phone was
+     * off, due in the last 2 hours and not taken, with no follow-up. Older doses only show red
+     * on Home.
+     */
+    suspend fun postLateDoses() {
+        myohassaOlevat().forEach { (annos, paiva) ->
+            Ilmoitukset.naytaAnnos(appContext, annos, paiva, myohassa = true)
+        }
+    }
+
+    /** the late doses with what their notifications need, oldest first, each with its day. */
+    internal suspend fun myohassaOlevat(): List<Pair<MuistutettavaAnnos, LocalDate>> {
+        val db = database()
+        val now = ZonedDateTime.now(clock)
+        // The 2-hour window can start yesterday, so read from yesterday on.
+        val days = listOf(now.toLocalDate().minusDays(1), now.toLocalDate())
+        val annokset = db.muistutusDao().getMuistutettavat(days.first())
+        if (annokset.isEmpty()) return emptyList()
+        val ids = annokset.map { it.muistutusId }
+        val taken = days.flatMap { day ->
+            db.laakkeenottoDao().takenOn(day, ids).map { TakenDose(it, day) }
+        }.toSet()
+        val byId = annokset.associateBy { it.muistutusId }
+        return lateDoses(now, annokset.map { it.aikataulu() }, taken)
+            .mapNotNull { annos -> byId[annos.muistutusId]?.let { it to annos.paivamaara } }
     }
 
     /** The reminder's dose of [paiva], if its medication is active and daily and it's due then. */

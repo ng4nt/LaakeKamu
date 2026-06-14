@@ -11,6 +11,8 @@
     <uses-permission
         android:name="android.permission.SCHEDULE_EXACT_ALARM"
         android:maxSdkVersion="32" />
+    <!-- The alarms are set again after a reboot. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- supportsRtl="false": the UI is Finnish only, so it stays left to right on a phone set to
          an RTL language; otherwise the rows mirror, the progress Canvas doesn't, and the bidi
          rules move "?" and "!" to the start of the texts. -->
@@ -44,6 +46,18 @@
         <receiver
             android:name=".reminders.NotificationActionReceiver"
             android:exported="false" />
+        <!-- Exported only for protected system broadcasts; onReceive checks the action. -->
+        <receiver
+            android:name=".reminders.BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

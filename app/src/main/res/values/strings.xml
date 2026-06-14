@@ -106,6 +106,8 @@
     <string name="muistutukset_pois">Muistutukset ovat pois päältä</string>
     <string name="salli_ilmoitukset">Salli ilmoitukset</string>
     <string name="ilmoitus_otsikko">Aika ottaa lääke</string>
+    <!-- A dose missed while the phone was off -->
+    <string name="ilmoitus_myohassa">Myöhässä</string>
     <!-- "A aamulääke 5 mg · klo 8.00" -->
     <string name="ilmoitus_annos">%1$s %2$s %3$s · klo %4$s</string>
     <!-- Lock screen version: no medication data -->

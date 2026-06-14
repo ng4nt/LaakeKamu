@@ -3,6 +3,7 @@ package fi.hh.laakekamu.data
 import android.content.Context
 import android.util.Log
 import fi.hh.laakekamu.reminders.AjastavaLaakeRepository
+import fi.hh.laakekamu.reminders.Ilmoitukset
 import fi.hh.laakekamu.reminders.KuittaavaAnnosRepository
 import fi.hh.laakekamu.reminders.MuistutusScheduler
 import java.security.GeneralSecurityException
@@ -59,8 +60,17 @@ class AppContainer(
      * opens a new database with only the seeds. The key goes first: if the process dies in
      * between, the file is left without its key and the error screen offers the start-over
      * again, instead of a missing file with a key that no longer unwraps.
+     *
+     * Then the old data's notifications are removed and the alarms reset: the
+     * new database has no reminders, so every old slot is cancelled. This runs after the lock,
+     * because the reschedule reads through [database].
      */
-    suspend fun startOver(): AppDatabase = databaseMutex.withLock {
+    suspend fun startOver(): AppDatabase = deleteAndReopen().also {
+        Ilmoitukset.poistaKaikki(appContext)
+        scheduler.rescheduleAfterChange()
+    }
+
+    private suspend fun deleteAndReopen(): AppDatabase = databaseMutex.withLock {
         try {
             withContext(ioDispatcher) {
                 database?.close()
