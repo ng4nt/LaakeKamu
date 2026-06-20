@@ -36,6 +36,12 @@ class FakeLaakeRepository(
     /** When set, [nameError] fails, as when the database is lost between two calls. */
     var nameErrorFails = false
 
+    /** When set, [delete] fails, as when the database can't be written. */
+    var deleteFails = false
+
+    /** The ids passed to [delete], in order. */
+    val deleted = mutableListOf<Long>()
+
     override fun observeTyypit(): Flow<List<Tyyppi>> = if (failChoices) {
         flow { throw IllegalStateException("database unavailable") }
     } else {
@@ -85,6 +91,8 @@ class FakeLaakeRepository(
     }
 
     override suspend fun delete(laakeId: Long): List<Long> {
+        if (deleteFails) throw IllegalStateException("database unavailable")
+        deleted += laakeId
         laakkeet.value =
             laakkeet.value.map { if (it.laakeId == laakeId) it.copy(aktiivinen = false) else it }
         return emptyList()
