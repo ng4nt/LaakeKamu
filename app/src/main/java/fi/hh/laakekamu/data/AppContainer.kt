@@ -141,11 +141,14 @@ class AppContainer(
         MuistutusScheduler(appContext, ::database, clock, ioDispatcher)
     }
 
-    // Every medication change resets the reminder alarms.
+    // Every medication change resets the reminder alarms; a delete also removes the medication's
+    // notifications and snoozes.
     val laakeRepository: LaakeRepository by lazy {
-        AjastavaLaakeRepository(RoomLaakeRepository(::database, clock)) {
-            scheduler.rescheduleAfterChange()
-        }
+        AjastavaLaakeRepository(
+            RoomLaakeRepository(::database, clock),
+            forget = { scheduler.forget(it) },
+            reschedule = { scheduler.rescheduleAfterChange() }
+        )
     }
 
     // A tick in the app also removes that dose's notification.

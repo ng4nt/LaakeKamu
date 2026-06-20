@@ -134,7 +134,7 @@ class MuistutusScheduler(
     suspend fun snooze(muistutusId: Long, paiva: LocalDate) {
         val at = Instant.now(clock).plusSeconds(SNOOZE_MINUTES * SECONDS_PER_MINUTE)
         withContext(ioDispatcher) {
-            val operation = snoozeIntent(muistutusId, paiva)
+            val operation = snoozeIntent(muistutusId, paiva, PendingIntent.FLAG_UPDATE_CURRENT)!!
             if (canScheduleExact()) {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP,
@@ -157,6 +157,28 @@ class MuistutusScheduler(
         val annos = dueDose(db, muistutusId, paiva) ?: return
         postUntaken(db, listOf(annos), paiva)
     }
+
+    /**
+     * A medication was deleted: removes the notifications of its reminders
+     * [muistutusIds] and cancels their snoozes. A snooze would find nothing due and stay silent,
+     * but cancelling it means the phone isn't woken for nothing. The slot alarms are the
+     * reschedule's job.
+     */
+    suspend fun forget(muistutusIds: Collection<Long>) {
+        withContext(ioDispatcher) {
+            muistutusIds.forEach { id ->
+                Ilmoitukset.poista(appContext, id)
+                snoozeIntent(id, null, PendingIntent.FLAG_NO_CREATE)?.let {
+                    alarmManager.cancel(it)
+                    it.cancel()
+                }
+            }
+        }
+    }
+
+    /** Whether a snooze of [muistutusId] is set (for tests). */
+    internal fun hasSnooze(muistutusId: Long): Boolean =
+        snoozeIntent(muistutusId, null, PendingIntent.FLAG_NO_CREATE) != null
 
     /**
      * After BOOT_COMPLETED: posts "Myöhässä" once for each dose missed while the phone was
@@ -210,16 +232,20 @@ class MuistutusScheduler(
             .forEach { Ilmoitukset.naytaAnnos(appContext, it, paiva) }
     }
 
-    private fun snoozeIntent(muistutusId: Long, paiva: LocalDate): PendingIntent {
+    /**
+     * The snooze's AlarmReceiver intent: request code 10 000 + id and a data URI
+     * that gives it its identity. [paiva] (the dose day) is left out when only looking it up.
+     */
+    private fun snoozeIntent(muistutusId: Long, paiva: LocalDate?, flags: Int): PendingIntent? {
         val intent = Intent(appContext, AlarmReceiver::class.java)
             .setData(Uri.parse("laakekamu://snooze/$muistutusId"))
             .putExtra(NotificationActionReceiver.EXTRA_MUISTUTUS_ID, muistutusId)
-            .putExtra(AlarmReceiver.EXTRA_PAIVA, paiva.toEpochDay())
+        paiva?.let { intent.putExtra(AlarmReceiver.EXTRA_PAIVA, it.toEpochDay()) }
         return PendingIntent.getBroadcast(
             appContext,
             SNOOZE_CODE_BASE + muistutusId.toInt(),
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            flags or PendingIntent.FLAG_IMMUTABLE
         )
     }
 

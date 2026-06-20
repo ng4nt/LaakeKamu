@@ -170,17 +170,21 @@ class RoomLaakeRepository(
 
     /**
      * Deletes a medication: a soft delete (aktiivinen = false) that ends its reminders by
-     * So it disappears from the list and Home while its history stays in the diary.
+     * So it disappears from the list and Home while its history stays in the diary. Returns
+     * the ids of all its reminders as they were before (ended and deleted ones too), whose
+     * notifications and snoozes the caller removes.
      */
-    override suspend fun delete(laakeId: Long) {
+    override suspend fun delete(laakeId: Long): List<Long> {
         val db = database()
-        db.withTransaction {
+        return db.withTransaction {
             val laake = requireNotNull(db.laakeDao().getById(laakeId)) { "No medication $laakeId" }
+            val ids = db.muistutusDao().getByLaake(laakeId).map { it.muistutusId }
             db.laakeDao().update(laake.copy(aktiivinen = false))
             val today = today()
             val current = currentJaksot(db, laakeId)
             val ends = endAll(current, today, takenToday(db, current, today))
             apply(db, laakeId, current, capToMedicationEnd(ends, current, laake.lopetuspv, today))
+            ids
         }
     }
 

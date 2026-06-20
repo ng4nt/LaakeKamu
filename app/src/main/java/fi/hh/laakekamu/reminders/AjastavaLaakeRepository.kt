@@ -6,10 +6,12 @@ import fi.hh.laakekamu.domain.EditedTime
 
 /**
  * A [LaakeRepository] that resets the reminder alarms after every medication change. A failed reschedule is only
- * logged, so it never turns a successful save into an error.
+ * logged, so it never turns a successful save into an error. A delete also gives the deleted
+ * medication's reminder ids to [forget], which removes their notifications and snoozes.
  */
 class AjastavaLaakeRepository(
     private val laakkeet: LaakeRepository,
+    private val forget: suspend (List<Long>) -> Unit,
     private val reschedule: suspend () -> Unit
 ) : LaakeRepository by laakkeet {
     override suspend fun add(laake: Laake, times: List<Int>): Long =
@@ -20,8 +22,8 @@ class AjastavaLaakeRepository(
         reschedule()
     }
 
-    override suspend fun delete(laakeId: Long) {
-        laakkeet.delete(laakeId)
+    override suspend fun delete(laakeId: Long): List<Long> = laakkeet.delete(laakeId).also {
+        forget(it)
         reschedule()
     }
 }

@@ -84,8 +84,9 @@ class FakeLaakeRepository(
         laakkeet.value = laakkeet.value.map { if (it.laakeId == laake.laakeId) laake else it }
     }
 
-    override suspend fun delete(laakeId: Long) {
+    override suspend fun delete(laakeId: Long): List<Long> {
         laakkeet.value =
             laakkeet.value.map { if (it.laakeId == laakeId) it.copy(aktiivinen = false) else it }
+        return emptyList()
     }
 }

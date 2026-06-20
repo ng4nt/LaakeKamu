@@ -7,9 +7,12 @@ import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Laakkeenotto
 import fi.hh.laakekamu.data.entity.Oiremerkinta
 import fi.hh.laakekamu.domain.KuinkaUsein
+import fi.hh.laakekamu.ui.oirepaivakirja.valmiitPaivat
 import java.time.Clock
 import java.time.LocalDate
+import java.time.YearMonth
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -76,6 +79,33 @@ class PaivakirjaRepositoryTest {
         assertEquals(otto.muistutusId, reminder.muistutusId)
         assertEquals("A aamulääke", laake.nimi)
         assertFalse(laake.aktiivinen)
+    }
+
+    @Test
+    fun deletedMedication_keepsThePastDaysComplete() = runTest {
+        // Taken on the last two days; the 8.00 dose of today (10.00 now) is missed.
+        val muistutus = addWithReminder("A aamulääke")
+        listOf(1L, 2L).forEach { take(muistutus, today.minusDays(it)) }
+        val before = valmiit()
+        val laakeId = paivakirja.observeLaakkeet().first().single().laakeId
+
+        laakkeet.delete(laakeId)
+
+        // The ✓ days stay; today was never complete and now has nothing due.
+        assertEquals(setOf(today.minusDays(2), today.minusDays(1)), before)
+        assertEquals(before, valmiit())
+    }
+
+    /** The complete days of this month, as the diary computes them. */
+    private suspend fun valmiit(): Set<LocalDate> {
+        val kuukausi = YearMonth.from(today)
+        return valmiitPaivat(
+            kuukausi,
+            ZonedDateTime.now(clock),
+            paivakirja.observeLaakkeet().first(),
+            paivakirja.observeMuistutukset().first(),
+            paivakirja.observeOtot(kuukausi.atDay(1), kuukausi.atEndOfMonth()).first()
+        )
     }
 
     @Test
