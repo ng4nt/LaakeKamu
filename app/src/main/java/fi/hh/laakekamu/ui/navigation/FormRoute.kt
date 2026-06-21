@@ -7,6 +7,9 @@ import java.time.LocalDate
 object FormRoute {
     const val LISAA_LAAKE = "lisaa_laake"
 
+    /** Muokkaa lääkettä: choose a medication to edit or delete. */
+    const val MUOKKAA_LAAKETTA = "muokkaa_laaketta"
+
     /** The symptom form; its argument is the start date's default as an epoch day. */
     const val LISAA_OIRE = "lisaa_oire/{${LisaaOireViewModel.ARG_ALKAA}}"
 

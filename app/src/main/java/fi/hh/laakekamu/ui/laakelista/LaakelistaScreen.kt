@@ -62,7 +62,7 @@ private val BUTTONS_BOTTOM = 56.dp
 
 /**
  * Lääkelista: daily medications by time, as-needed ones, labels and ended ones
- * greyed out. [onAdd] opens the wizard; [onEdit] opens the edit selector.
+ * greyed out. [onAdd] opens the wizard; [onEdit] opens Muokkaa lääkettä.
  */
 @Composable
 fun LaakelistaScreen(
