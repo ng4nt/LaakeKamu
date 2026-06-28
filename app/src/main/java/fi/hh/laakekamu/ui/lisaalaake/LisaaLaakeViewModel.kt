@@ -15,10 +15,12 @@ import fi.hh.laakekamu.data.LaakeRepository
 import fi.hh.laakekamu.data.entity.Laake
 import fi.hh.laakekamu.data.entity.Tyyppi
 import fi.hh.laakekamu.data.entity.Yksikko
+import fi.hh.laakekamu.domain.EditedTime
 import fi.hh.laakekamu.domain.Kesto
 import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.NameError
 import fi.hh.laakekamu.domain.isValidDateRange
+import fi.hh.laakekamu.domain.isValidEndDateEdit
 import fi.hh.laakekamu.domain.kestoOf
 import java.time.Clock
 import java.time.LocalDate
@@ -56,9 +58,13 @@ sealed interface AikaError {
 data class Step2Errors(
     val ajat: Map<Int, AikaError> = emptyMap(),
     val kuinkaUsein: Boolean = false,
-    val lopetuspv: Boolean = false
+    /** Lopetuspäivä is before Aloituspäivä. */
+    val lopetuspv: Boolean = false,
+    /** Editing: a changed end date is in the past, which would hide past doses. */
+    val lopetuspvMennyt: Boolean = false
 ) {
-    val isEmpty: Boolean get() = ajat.isEmpty() && !kuinkaUsein && !lopetuspv
+    val isEmpty: Boolean
+        get() = ajat.isEmpty() && !kuinkaUsein && !lopetuspv && !lopetuspvMennyt
 }
 
 /** Everything the add/edit wizard shows. */
@@ -84,7 +90,13 @@ data class LisaaLaakeUiState(
     /** The last save failed for another reason than the name (e.g. the database). */
     val saveError: Boolean = false,
     /** The medication is saved: the screen leaves (also after a restore). */
-    val saved: Boolean = false
+    val saved: Boolean = false,
+    /** An existing medication is being edited. */
+    val editing: Boolean = false,
+    /** Editing: the medication isn't in the form yet, so the form isn't shown. */
+    val loading: Boolean = false,
+    /** Editing: the medication couldn't be read (deleted meanwhile, or the database). */
+    val editLoadError: Boolean = false
 ) {
     /** Tarvittaessa has no times, so the time rows are disabled. */
     val ajatEnabled: Boolean get() = kuinkaUsein != KuinkaUsein.TARVITTAESSA
@@ -98,6 +110,10 @@ data class LisaaLaakeUiState(
  * picked, checks the date range as the dates change and validates everything on "Valmis!",
  * which then saves the medication. [clock] gives "today" (the default start date and the
  * duration hint).
+ *
+ * With an [ARG_LAAKE_ID] argument the wizard edits that medication: the form is filled
+ * once from it and its current reminders, each time row remembers its reminder's id, and
+ * "Valmis!" saves through [LaakeRepository.update], which applies rules.
  */
 class LisaaLaakeViewModel(
     private val handle: SavedStateHandle,
@@ -107,8 +123,12 @@ class LisaaLaakeViewModel(
     private val errors = MutableStateFlow(Step1Errors())
     private val step2Errors = MutableStateFlow(Step2Errors())
     private val saveState = MutableStateFlow(SaveState())
+    private val editLoadFailed = MutableStateFlow(false)
     private var validation: Job? = null
     private var saveJob: Job? = null
+
+    /** The medication being edited, or null when adding. */
+    private val laakeId: Long? = handle[ARG_LAAKE_ID]
 
     /**
      * The typed texts are Compose state, so a text field gets its new value in the same frame
@@ -124,9 +144,17 @@ class LisaaLaakeViewModel(
         handle.getStateFlow(KEY_STEP, 1),
         handle.getStateFlow<Long?>(KEY_TYYPPI_ID, null),
         handle.getStateFlow<String?>(KEY_YKSIKKO, null),
-        handle.getStateFlow(KEY_SAVED, false)
-    ) { step, tyyppiId, yksikko, saved ->
-        LisaaLaakeUiState(step = step, tyyppiId = tyyppiId, yksikko = yksikko, saved = saved)
+        handle.getStateFlow(KEY_SAVED, false),
+        handle.getStateFlow(KEY_LOADED, false)
+    ) { step, tyyppiId, yksikko, saved, loaded ->
+        LisaaLaakeUiState(
+            step = step,
+            tyyppiId = tyyppiId,
+            yksikko = yksikko,
+            saved = saved,
+            editing = laakeId != null,
+            loading = laakeId != null && !loaded
+        )
     }
 
     private val step2 = combine(
@@ -147,15 +175,17 @@ class LisaaLaakeViewModel(
             Choices(tyypit, yksikot)
         }.catch { emit(Choices(emptyList(), emptyList(), loadError = true)) }
 
-    private val feedback = combine(errors, step2Errors, saveState, ::Triple)
+    private val feedback = combine(errors, step2Errors, saveState, editLoadFailed, ::Feedback)
 
     val uiState: StateFlow<LisaaLaakeUiState> = combine(
         step1,
         step2,
         choices,
         feedback
-    ) { state, values, loaded, (found1, found2, save) ->
+    ) { state, values, loaded, (found1, found2, save, loadFailed) ->
         values.applyTo(state).copy(
+            loading = state.loading && !loadFailed,
+            editLoadError = loadFailed,
             tyypit = loaded.tyypit,
             yksikot = loaded.yksikot,
             loadError = loaded.loadError,
@@ -165,6 +195,47 @@ class LisaaLaakeViewModel(
             saveError = save.failed
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), restoredState())
+
+    init {
+        // After a restore the handle already holds the user's changes.
+        if (laakeId != null && handle.get<Boolean>(KEY_LOADED) != true) load(laakeId)
+    }
+
+    /**
+     * Edit mode: fills the form from the medication and its current reminders
+     * (voimassa_asti IS NULL), earliest first, each row with its reminder's id.
+     */
+    private fun load(id: Long) {
+        viewModelScope.launch {
+            try {
+                val laake = repository.get(id)?.takeIf { it.aktiivinen }
+                if (laake == null) {
+                    editLoadFailed.value = true
+                    return@launch
+                }
+                val reminders = repository.currentTimes(id).sortedBy { it.aika }
+                nimi = laake.nimi
+                annosmaara = laake.annosmaara
+                handle[KEY_NIMI] = laake.nimi
+                handle[KEY_ANNOSMAARA] = laake.annosmaara
+                handle[KEY_TYYPPI_ID] = laake.tyyppiId
+                handle[KEY_YKSIKKO] = laake.yksikko
+                handle[KEY_KUINKA_USEIN] = laake.kuinkaUsein.name
+                handle[KEY_AJAT] =
+                    reminders.map { it.aika }.ifEmpty { listOf(NO_TIME) }.toIntArray()
+                handle[KEY_AJAT_IDS] =
+                    reminders.map { it.muistutusId }.ifEmpty { listOf(NO_ID) }.toLongArray()
+                handle[KEY_ALOITUSPV] = laake.aloituspv.toEpochDay()
+                handle[KEY_LOPETUSPV] = laake.lopetuspv?.toEpochDay()
+                handle[KEY_ALKUPERAINEN_LOPETUSPV] = laake.lopetuspv?.toEpochDay()
+                handle[KEY_LOADED] = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                editLoadFailed.value = true
+            }
+        }
+    }
 
     fun onNimiChange(value: String) {
         nimi = value
@@ -206,7 +277,7 @@ class LisaaLaakeViewModel(
             yksikko = handle.get<String>(KEY_YKSIKKO) == null
         )
         validation = viewModelScope.launch {
-            val found = missing.copy(nimi = repository.nameError(name))
+            val found = missing.copy(nimi = repository.nameError(name, laakeId))
             errors.value = found
             if (found.isEmpty) handle[KEY_STEP] = 2
         }
@@ -226,6 +297,7 @@ class LisaaLaakeViewModel(
             setAikaError(index, AikaError.JoLisatty(aika))
             return
         }
+        // The row keeps its reminder id: a moved time, not a new one.
         handle[KEY_AJAT] = ajat.copyOf().also { it[index] = aika }
         setAikaError(index, null)
     }
@@ -233,14 +305,18 @@ class LisaaLaakeViewModel(
     /** "+ Lisää aika": a new empty row at the end. */
     fun onLisaaAika() {
         if (!ajatEnabled()) return
+        val ids = ids()
         handle[KEY_AJAT] = ajat() + NO_TIME
+        handle[KEY_AJAT_IDS] = ids + NO_ID
     }
 
     /** ✕ on row [index]. The last row stays (a daily medication needs a time). */
     fun onPoistaAika(index: Int) {
         val ajat = ajat()
         if (ajat.size <= 1 || index !in ajat.indices) return
+        val ids = ids()
         handle[KEY_AJAT] = ajat.filterIndexed { i, _ -> i != index }.toIntArray()
+        handle[KEY_AJAT_IDS] = ids.filterIndexed { i, _ -> i != index }.toLongArray()
         step2Errors.update { errors ->
             val shifted = errors.ajat
                 .filterKeys { it != index }
@@ -252,7 +328,10 @@ class LisaaLaakeViewModel(
     /** Tarvittaessa clears and disables the times. */
     fun onKuinkaUseinSelect(value: KuinkaUsein) {
         handle[KEY_KUINKA_USEIN] = value.name
-        if (value == KuinkaUsein.TARVITTAESSA) handle[KEY_AJAT] = intArrayOf(NO_TIME)
+        if (value == KuinkaUsein.TARVITTAESSA) {
+            handle[KEY_AJAT] = intArrayOf(NO_TIME)
+            handle[KEY_AJAT_IDS] = longArrayOf(NO_ID)
+        }
         step2Errors.update {
             it.copy(
                 kuinkaUsein = false,
@@ -276,12 +355,15 @@ class LisaaLaakeViewModel(
      * "Valmis!": validates step 2, then saves the medication in one transaction: a daily
      * one with its times, an as-needed one without. A second tap while saving, or after,
      * does nothing. If the name was taken meanwhile (e.g. in another window), step 1 shows the duplicate-name
-     * error again; any other failure keeps the form and shows an error.
+     * error again; any other failure keeps the form and shows an error. When editing, the time
+     * rows go to the repository with their reminder ids, and it applies the reminder rules.
      */
     fun onDone() {
         if (saveJob?.isActive == true || handle.get<Boolean>(KEY_SAVED) == true) return
+        if (laakeId != null && handle.get<Boolean>(KEY_LOADED) != true) return
         if (!validateStep2()) return
         val laake = Laake(
+            laakeId = laakeId ?: 0,
             nimi = nimi.trim(),
             tyyppiId = handle.get<Long>(KEY_TYYPPI_ID) ?: return,
             annosmaara = annosmaara.trim(),
@@ -290,21 +372,28 @@ class LisaaLaakeViewModel(
             aloituspv = aloituspv(),
             lopetuspv = lopetuspv()
         )
-        val times = if (laake.kuinkaUsein == KuinkaUsein.PAIVITTAIN) {
-            ajat().filter { it != NO_TIME }
+        val rows = if (laake.kuinkaUsein == KuinkaUsein.PAIVITTAIN) {
+            ajat().toList().zip(ids().toList()).filter { (aika, _) -> aika != NO_TIME }
         } else {
             emptyList()
         }
         saveJob = viewModelScope.launch {
             saveState.value = SaveState(saving = true)
             try {
-                repository.add(laake, times)
+                if (laakeId == null) {
+                    repository.add(laake, rows.map { (aika, _) -> aika })
+                } else {
+                    val times = rows.map { (aika, id) ->
+                        EditedTime(id.takeIf { it != NO_ID }, aika)
+                    }
+                    repository.update(laake, times)
+                }
                 handle[KEY_SAVED] = true
                 saveState.value = SaveState()
             } catch (e: IllegalArgumentException) {
                 // A failed re-check (e.g. the database lost meanwhile) shows the save error.
                 val nameError = try {
-                    repository.nameError(laake.nimi)
+                    repository.nameError(laake.nimi, laakeId)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -341,7 +430,8 @@ class LisaaLaakeViewModel(
         val found = Step2Errors(
             ajat = ajatErrors,
             kuinkaUsein = kuinkaUsein() == null,
-            lopetuspv = !isValidDateRange(aloituspv(), lopetuspv())
+            lopetuspv = !isValidDateRange(aloituspv(), lopetuspv()),
+            lopetuspvMennyt = lopetuspvMennyt()
         )
         step2Errors.value = found
         return found.isEmpty
@@ -350,6 +440,20 @@ class LisaaLaakeViewModel(
     private fun today(): LocalDate = LocalDate.now(clock)
 
     private fun ajat(): IntArray = handle[KEY_AJAT] ?: intArrayOf(NO_TIME)
+
+    /** The reminder id of each time row ([NO_ID] = a new time), in step with [ajat]. */
+    private fun ids(): LongArray {
+        val ids = handle.get<LongArray>(KEY_AJAT_IDS) ?: LongArray(0)
+        return LongArray(ajat().size) { ids.getOrElse(it) { NO_ID } }
+    }
+
+    /** Editing: the end date was changed to a day before today. */
+    private fun lopetuspvMennyt(): Boolean {
+        if (laakeId == null) return false
+        val alkuperainen =
+            handle.get<Long>(KEY_ALKUPERAINEN_LOPETUSPV)?.let(LocalDate::ofEpochDay)
+        return !isValidEndDateEdit(alkuperainen, lopetuspv(), today())
+    }
 
     private fun kuinkaUsein(): KuinkaUsein? =
         handle.get<String>(KEY_KUINKA_USEIN)?.let(KuinkaUsein::valueOf)
@@ -369,7 +473,12 @@ class LisaaLaakeViewModel(
     }
 
     private fun checkDateRange() {
-        step2Errors.update { it.copy(lopetuspv = !isValidDateRange(aloituspv(), lopetuspv())) }
+        step2Errors.update {
+            it.copy(
+                lopetuspv = !isValidDateRange(aloituspv(), lopetuspv()),
+                lopetuspvMennyt = lopetuspvMennyt()
+            )
+        }
     }
 
     /** The saved values, so the first frame after a restore already shows them. */
@@ -377,7 +486,9 @@ class LisaaLaakeViewModel(
         val state = LisaaLaakeUiState(
             step = handle[KEY_STEP] ?: 1,
             tyyppiId = handle[KEY_TYYPPI_ID],
-            yksikko = handle[KEY_YKSIKKO]
+            yksikko = handle[KEY_YKSIKKO],
+            editing = laakeId != null,
+            loading = laakeId != null && handle.get<Boolean>(KEY_LOADED) != true
         )
         val values = Step2Values(
             ajat(),
@@ -390,6 +501,14 @@ class LisaaLaakeViewModel(
 
     /** Saving with "Valmis!": in progress, or the last attempt [failed]. */
     private data class SaveState(val saving: Boolean = false, val failed: Boolean = false)
+
+    /** The validation and save results shown on top of the form. */
+    private data class Feedback(
+        val step1: Step1Errors,
+        val step2: Step2Errors,
+        val save: SaveState,
+        val editLoadFailed: Boolean
+    )
 
     /** The wizard's choice lists, or [loadError] when they couldn't be read. */
     private data class Choices(
@@ -419,6 +538,9 @@ class LisaaLaakeViewModel(
     }
 
     companion object {
+        /** The navigation argument: the id of the medication to edit (absent when adding). */
+        const val ARG_LAAKE_ID = "laakeId"
+
         private const val KEY_STEP = "step"
         private const val KEY_NIMI = "nimi"
         private const val KEY_TYYPPI_ID = "tyyppiId"
@@ -429,9 +551,15 @@ class LisaaLaakeViewModel(
         private const val KEY_ALOITUSPV = "aloituspv"
         private const val KEY_LOPETUSPV = "lopetuspv"
         private const val KEY_SAVED = "saved"
+        private const val KEY_AJAT_IDS = "ajatIds"
+        private const val KEY_LOADED = "loaded"
+        private const val KEY_ALKUPERAINEN_LOPETUSPV = "alkuperainenLopetuspv"
 
         /** An empty time row in the saved `IntArray`. */
         private const val NO_TIME = -1
+
+        /** A time row without a reminder yet in the saved `LongArray`. */
+        private const val NO_ID = -1L
 
         val Factory = viewModelFactory {
             initializer {

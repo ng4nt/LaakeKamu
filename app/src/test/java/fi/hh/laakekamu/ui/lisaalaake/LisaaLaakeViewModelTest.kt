@@ -3,6 +3,8 @@ package fi.hh.laakekamu.ui.lisaalaake
 import androidx.lifecycle.SavedStateHandle
 import fi.hh.laakekamu.data.FakeLaakeRepository
 import fi.hh.laakekamu.data.entity.Laake
+import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.domain.EditedTime
 import fi.hh.laakekamu.domain.Kesto
 import fi.hh.laakekamu.domain.KuinkaUsein
 import fi.hh.laakekamu.domain.NameError
@@ -445,6 +447,161 @@ class LisaaLaakeViewModelTest {
         assertFalse(state.saved || state.saving)
         assertEquals(2, state.step)
     }
+
+    @Test
+    fun edit_prefillsTheForm_withTheCurrentReminders() = runTest {
+        givenEdited(lopetuspv = today.plusDays(9))
+
+        val vm = editViewModel().also { collect(it) }
+
+        val state = vm.uiState.value
+        assertTrue(state.editing)
+        assertFalse(state.loading)
+        assertEquals("A aamulääke", vm.nimi)
+        assertEquals("5", vm.annosmaara)
+        assertEquals(1L, state.tyyppiId)
+        assertEquals("mg", state.yksikko)
+        assertEquals(KuinkaUsein.PAIVITTAIN, state.kuinkaUsein)
+        // Earliest first.
+        assertEquals(listOf(480, 1200), state.ajat)
+        assertEquals(LocalDate.of(2025, 12, 1), state.aloituspv)
+        assertEquals(today.plusDays(9), state.lopetuspv)
+    }
+
+    @Test
+    fun edit_keepsItsOwnName() = runTest {
+        givenEdited()
+        val vm = editViewModel().also { collect(it) }
+
+        vm.onNext()
+
+        assertNull(vm.uiState.value.errors.nimi)
+        assertEquals(2, vm.uiState.value.step)
+    }
+
+    @Test
+    fun edit_done_sendsEachTimeWithItsReminderId() = runTest {
+        givenEdited()
+        val vm = editViewModel().also { collect(it) }
+        vm.onNext()
+
+        // 8.00 moves to 9.00, 20.00 is removed, 13.00 is new.
+        vm.onAikaChange(0, 540)
+        vm.onPoistaAika(1)
+        vm.onLisaaAika()
+        vm.onAikaChange(1, 780)
+        vm.onDone()
+
+        val (laake, times) = repository.updated.single()
+        assertEquals(1L, laake.laakeId)
+        assertEquals(listOf(EditedTime(11, 540), EditedTime(null, 780)), times)
+        assertTrue(repository.added.isEmpty())
+        assertTrue(vm.uiState.value.saved)
+    }
+
+    @Test
+    fun edit_switchToTarvittaessa_sendsNoTimes() = runTest {
+        givenEdited()
+        val vm = editViewModel().also { collect(it) }
+        vm.onNext()
+
+        vm.onKuinkaUseinSelect(KuinkaUsein.TARVITTAESSA)
+        vm.onDone()
+
+        val (laake, times) = repository.updated.single()
+        assertEquals(KuinkaUsein.TARVITTAESSA, laake.kuinkaUsein)
+        assertTrue(times.isEmpty())
+    }
+
+    @Test
+    fun edit_endDateChangedToThePast_isRejected() = runTest {
+        givenEdited()
+        val vm = editViewModel().also { collect(it) }
+        vm.onNext()
+
+        vm.onLopetuspvChange(today.minusDays(1))
+        vm.onDone()
+
+        assertTrue(vm.uiState.value.step2Errors.lopetuspvMennyt)
+        assertTrue(repository.updated.isEmpty())
+    }
+
+    @Test
+    fun edit_keepingAnEndDateInThePast_isAllowed() = runTest {
+        givenEdited(lopetuspv = today.minusDays(3))
+        val vm = editViewModel().also { collect(it) }
+        vm.onNext()
+
+        vm.onDone()
+
+        assertFalse(vm.uiState.value.step2Errors.lopetuspvMennyt)
+        assertEquals(1, repository.updated.size)
+    }
+
+    @Test
+    fun edit_deletedMedication_showsTheLoadError() = runTest {
+        givenEdited()
+        repository.laakkeet.value = repository.laakkeet.value.map { it.copy(aktiivinen = false) }
+
+        val vm = editViewModel().also { collect(it) }
+
+        assertTrue(vm.uiState.value.editLoadError)
+        assertFalse(vm.uiState.value.loading)
+    }
+
+    @Test
+    fun edit_unreadableDatabase_showsTheLoadError() = runTest {
+        givenEdited()
+        repository.getFails = true
+
+        val vm = editViewModel().also { collect(it) }
+
+        assertTrue(vm.uiState.value.editLoadError)
+    }
+
+    @Test
+    fun edit_restoredAfterProcessDeath_keepsTheUsersChanges() = runTest {
+        givenEdited()
+        val handle = SavedStateHandle(mapOf(LisaaLaakeViewModel.ARG_LAAKE_ID to 1L))
+        val first = viewModel(handle).also { collect(it) }
+        first.onNimiChange("A aamulääke 2")
+        first.onNext()
+        first.onAikaChange(0, 540)
+
+        val restored =
+            viewModel(SavedStateHandle(handle.keys().associateWith { handle.get<Any?>(it) }))
+        collect(restored)
+        restored.onDone()
+
+        assertEquals("A aamulääke 2", restored.nimi)
+        val (laake, times) = repository.updated.single()
+        assertEquals("A aamulääke 2", laake.nimi)
+        assertEquals(listOf(EditedTime(11, 540), EditedTime(12, 1200)), times)
+    }
+
+    /** Medication 1 with current reminders 12 (20.00, listed first) and 11 (8.00). */
+    private fun givenEdited(lopetuspv: LocalDate? = null) {
+        repository.laakkeet.value = listOf(laake("A aamulääke").copy(lopetuspv = lopetuspv))
+        repository.currentReminders[1L] = listOf(
+            Muistutus(
+                muistutusId = 12,
+                laakeId = 1,
+                aika = 1200,
+                voimassaAlkaen = today,
+                voimassaAsti = null
+            ),
+            Muistutus(
+                muistutusId = 11,
+                laakeId = 1,
+                aika = 480,
+                voimassaAlkaen = today,
+                voimassaAsti = null
+            )
+        )
+    }
+
+    private fun editViewModel() =
+        viewModel(SavedStateHandle(mapOf(LisaaLaakeViewModel.ARG_LAAKE_ID to 1L)))
 
     private fun fillStep2(vm: LisaaLaakeViewModel) {
         vm.onKuinkaUseinSelect(KuinkaUsein.PAIVITTAIN)

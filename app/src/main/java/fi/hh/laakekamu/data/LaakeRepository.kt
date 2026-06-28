@@ -28,6 +28,9 @@ interface LaakeRepository {
      */
     fun observeCurrentTimes(): Flow<Map<Long, List<Int>>>
 
+    /** The medication with [laakeId], also a deleted one, or null (for the edit wizard). */
+    suspend fun get(laakeId: Long): Laake?
+
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
     suspend fun currentTimes(laakeId: Long): List<Muistutus>
 

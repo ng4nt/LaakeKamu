@@ -58,7 +58,22 @@ class FakeLaakeRepository(
 
     override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = currentTimes
 
-    override suspend fun currentTimes(laakeId: Long): List<Muistutus> = emptyList()
+    /** The current reminders [currentTimes] returns, by medication id. */
+    val currentReminders = mutableMapOf<Long, List<Muistutus>>()
+
+    /** When set, [get] fails, as when the database can't be opened. */
+    var getFails = false
+
+    /** The medications and times passed to [update], in order. */
+    val updated = mutableListOf<Pair<Laake, List<EditedTime>>>()
+
+    override suspend fun get(laakeId: Long): Laake? {
+        check(!getFails) { "database unavailable" }
+        return laakkeet.value.find { it.laakeId == laakeId }
+    }
+
+    override suspend fun currentTimes(laakeId: Long): List<Muistutus> =
+        currentReminders[laakeId].orEmpty()
 
     override suspend fun nameError(name: String, editedId: Long?): NameError? {
         nameErrorGate?.await()
@@ -87,6 +102,7 @@ class FakeLaakeRepository(
     }
 
     override suspend fun update(laake: Laake, times: List<EditedTime>) {
+        updated += laake to times
         laakkeet.value = laakkeet.value.map { if (it.laakeId == laake.laakeId) laake else it }
     }
 
