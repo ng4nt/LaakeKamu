@@ -73,6 +73,9 @@
     <string name="laake_poistettu">Lääke poistettu</string>
     <string name="virhe_laake_poisto">Lääkettä ei voitu poistaa. Yritä uudelleen.</string>
     <string name="virhe_muokkaa_lataus">Lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_muokattava_lataus">Lääkettä ei voitu avata muokattavaksi. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_lopetus_menneisyydessa">Lopetuspäivä ei voi olla menneisyydessä.</string>
+    <string name="muutokset_tallennettu">Muutokset tallennettu</string>
 
     <!-- Etusivu -->
     <string name="ei_laakkeita_paivalle">Ei lääkkeitä tälle päivälle</string>

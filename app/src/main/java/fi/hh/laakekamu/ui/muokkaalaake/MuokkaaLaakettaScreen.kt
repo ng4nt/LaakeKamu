@@ -51,14 +51,14 @@ private val BOTTOM_PADDING = 47.dp
 private val FORM_WIDTH = 310.dp
 
 /**
- * Muokkaa lääkettä: choose a medication, then edit it ([onEdit]; disabled while
- * null) or delete it after a confirmation. [onDeleted] runs once it's deleted.
+ * Muokkaa lääkettä: choose a medication, then edit it in the wizard ([onEdit])
+ * or delete it after a confirmation. [onDeleted] runs once it's deleted.
  */
 @Composable
 fun MuokkaaLaakettaScreen(
     onClose: () -> Unit,
     onDeleted: () -> Unit,
-    onEdit: ((Long) -> Unit)?,
+    onEdit: (Long) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MuokkaaLaakettaViewModel = viewModel(factory = MuokkaaLaakettaViewModel.Factory)
 ) {
@@ -88,7 +88,7 @@ fun MuokkaaLaakettaScreen(
 private fun MuokkaaLaakettaContent(
     state: MuokkaaLaakettaUiState,
     onSelect: (Laake) -> Unit,
-    onEdit: ((Long) -> Unit)?,
+    onEdit: (Long) -> Unit,
     onDeleteClick: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
@@ -131,8 +131,8 @@ private fun MuokkaaLaakettaContent(
             Spacer(Modifier.height(FIELD_GAP))
             LkPrimaryButton(
                 text = stringResource(R.string.muokkaa),
-                onClick = { valittu?.let { onEdit?.invoke(it.laakeId) } },
-                enabled = enabled && onEdit != null
+                onClick = { valittu?.let { onEdit(it.laakeId) } },
+                enabled = enabled
             )
             Spacer(Modifier.height(BUTTON_GAP))
             LkDangerButton(

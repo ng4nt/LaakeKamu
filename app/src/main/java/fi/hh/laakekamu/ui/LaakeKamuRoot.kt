@@ -26,6 +26,7 @@ import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.etusivu.EtusivuScreen
 import fi.hh.laakekamu.ui.laakelista.LaakelistaScreen
 import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeScreen
+import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeViewModel
 import fi.hh.laakekamu.ui.lisaaoire.LisaaOireScreen
 import fi.hh.laakekamu.ui.lisaaoire.LisaaOireViewModel
 import fi.hh.laakekamu.ui.muokkaalaake.MuokkaaLaakettaScreen
@@ -87,6 +88,12 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                     stringResource(R.string.laake_poistettu),
                     snackbarHostState
                 )
+                SavedFlagSnackbar(
+                    handle,
+                    KEY_LAAKE_MUOKATTU,
+                    stringResource(R.string.muutokset_tallennettu),
+                    snackbarHostState
+                )
                 LaakelistaScreen(
                     onAdd = {
                         // A double tap mustn't push two wizards.
@@ -144,8 +151,27 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                         navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
                             .savedStateHandle[KEY_LAAKE_POISTETTU] = true
                     },
-                    // Editing is not built yet.
-                    onEdit = null
+                    onEdit = { laakeId ->
+                        navController.navigate(FormRoute.muokkaaLaake(laakeId)) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+            composable(
+                FormRoute.MUOKKAA_LAAKE,
+                arguments = listOf(
+                    navArgument(LisaaLaakeViewModel.ARG_LAAKE_ID) { type = NavType.LongType }
+                )
+            ) {
+                LisaaLaakeScreen(
+                    onClose = dropUnlessResumed { navController.popBackStack() },
+                    onSaved = {
+                        // Back to the list past the selector, as after a delete.
+                        navController.popBackStack(MainDestination.LAAKELISTA.route, false)
+                        navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                            .savedStateHandle[KEY_LAAKE_MUOKATTU] = true
+                    }
                 )
             }
             composable(FormRoute.LISAA_LAAKE) {
@@ -170,6 +196,9 @@ private const val KEY_LAAKE_LISATTY = "laakeLisatty"
 
 /** Lääkelista's saved-state flag: show "Lääke poistettu". */
 private const val KEY_LAAKE_POISTETTU = "laakePoistettu"
+
+/** Lääkelista's saved-state flag: show "Muutokset tallennettu" (the default text). */
+private const val KEY_LAAKE_MUOKATTU = "laakeMuokattu"
 
 /** Oirepäiväkirja's saved-state flag: show "Oire tallennettu". */
 private const val KEY_OIRE_TALLENNETTU = "oireTallennettu"
