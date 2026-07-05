@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- splashBg: the splash and the launcher icon background. -->
+    <color name="splash_bg">#FF37579D</color>
+</resources>

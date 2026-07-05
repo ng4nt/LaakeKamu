@@ -146,8 +146,8 @@ object Ilmoitukset {
     }
 
     private fun builder(context: Context) = NotificationCompat.Builder(context, KANAVA)
-        // The medicine icon until the app icon arrives.
-        .setSmallIcon(R.drawable.ic_medicine)
+        // The app icon; the status bar uses only its alpha, so it's a monochrome icon.
+        .setSmallIcon(R.drawable.ic_app_following)
         .setCategory(NotificationCompat.CATEGORY_REMINDER)
         .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setContentIntent(avaaSovellus(context))
