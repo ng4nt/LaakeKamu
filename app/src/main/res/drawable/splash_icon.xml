@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The splash icon. The system shows it in a 288dp box masked to a 192dp circle (no icon
-     background), so the 150dp Figma icon is inset to ~132dp, which keeps its corners inside the
-     circle: 150 / (150 + 2 × 89) × 288 ≈ 132. -->
+     background), so the Figma icon is inset to ~132dp, which keeps its corners inside the
+     circle: (288 − 132) / 2 / 288 ≈ 27.1 % per side. A fraction, because a dp inset is absolute
+     and doesn't scale with the box the system gives the icon. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_app_following"
-    android:inset="89dp" />
+    android:inset="27.1%" />

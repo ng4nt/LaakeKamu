@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The adaptive icon foreground (108dp, safe zone a 66dp circle): the Figma icon inset to ~46dp,
-     so its corners stay inside the safe zone: 150 / (150 + 2 × 101) × 108 ≈ 46. -->
+     so its corners stay inside the safe zone: (108 − 46) / 2 / 108 ≈ 28.7 % per side. A fraction,
+     not dp: a dp inset is absolute, and 2 × 101dp left nothing of the 108dp layer. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_app_following"
-    android:inset="101dp" />
+    android:inset="28.7%" />
