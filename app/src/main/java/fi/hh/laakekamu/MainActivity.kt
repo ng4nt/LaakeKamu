@@ -1,5 +1,6 @@
 package fi.hh.laakekamu
 
+import android.content.Context
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,10 +9,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import fi.hh.laakekamu.ui.LaakeKamuRoot
+import fi.hh.laakekamu.ui.format.withFinnishResources
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
 import fi.hh.laakekamu.ui.tietokanta.TietokantaPortti
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        // Finnish resources whatever the device language, so numbers in the texts stay Latin.
+        super.attachBaseContext(newBase.withFinnishResources())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // The splash comes from Theme.LaakeKamu.Starting; this switches to the
         // app theme. It must run before super.onCreate.
