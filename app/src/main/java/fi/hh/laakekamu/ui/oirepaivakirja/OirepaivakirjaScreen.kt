@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -32,9 +34,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -46,11 +50,15 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleStartEffect
@@ -93,6 +101,16 @@ private val GRID_SIDE = 12.dp
 private val GRID_BOTTOM = 20.dp
 private val ROW_HEIGHT = 48.dp
 private val SELECTED = 40.dp
+
+// with a large font on a narrow screen the month and the year shrink to fit on one line
+// instead of wrapping ("Loka" / "kuu"), never above the Figma size; the grid scales as a whole
+// (ruudukonTyyli) and keeps DATE_GAP free on each side of a label.
+private val MIN_FONT = 12.sp
+private val DATE_GAP = 3.dp
+private val MONTH_TO_YEAR = 8.dp
+
+private fun yhdelleRiville(max: TextUnit) =
+    TextAutoSize.StepBased(minFontSize = MIN_FONT, maxFontSize = max)
 
 // The ✓ of a complete day: the check icon on a white badge with a primary ring, over the
 // top end corner of the date's 40dp square, so it reads the same on the selected square and
@@ -416,23 +434,65 @@ private fun Kalenteri(
     ) {
         KuukausiOtsikko(state.kuukausi, onPrevious, onNext)
         Spacer(Modifier.height(HEADER_TO_WEEKDAYS))
-        Column(Modifier.padding(horizontal = GRID_SIDE)) {
-            Viikonpaivat()
-            Column(Modifier.selectableGroup()) {
-                state.viikot.forEach { viikko ->
-                    Row(Modifier.fillMaxWidth()) {
-                        viikko.forEach { day ->
-                            Paiva(
-                                day = day,
-                                selected = day == state.valittu,
-                                today = day == state.tanaan,
-                                valmis = day in state.valmiit,
-                                oire = day in state.oirePaivat,
-                                onSelect = onSelect,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
+        BoxWithConstraints(Modifier.padding(horizontal = GRID_SIDE)) {
+            val style = ruudukonTyyli(solu = maxWidth / 7)
+            Column {
+                Viikonpaivat(style)
+                Ruudukko(state, style, onSelect)
+            }
+        }
+    }
+}
+
+/**
+ * The grid's 25sp style, scaled down as a whole when the widest label ("ma"…"su", 10…31) plus
+ * [DATE_GAP] on each side doesn't fit a [solu]-wide cell: with a large font on a narrow screen
+ * the labels would otherwise wrap ("m" / "a") or run into each other ("1213"). One size for
+ * the whole grid, so "5" and "25" stay the same size.
+ */
+@Composable
+private fun ruudukonTyyli(solu: Dp): TextStyle {
+    val style = MaterialTheme.typography.headlineSmall
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val labels = remember {
+        val monday = LocalDate.of(2024, 1, 1)
+        (0L until 7L).map { formatWeekdayShort(monday.plusDays(it)) } +
+            (10..31).map { it.toString() }
+    }
+    val widest = remember(style, density) {
+        labels.maxOf { label ->
+            // Bold: the selected date is the widest form of a label.
+            measurer.measure(label, style.copy(fontWeight = FontWeight.Bold), softWrap = false)
+                .size.width
+        }
+    }
+    val available = with(density) { (solu - DATE_GAP * 2).toPx() }
+    val scale = (available / widest).coerceAtMost(1f)
+    return if (scale < 1f) style.copy(fontSize = style.fontSize * scale) else style
+}
+
+/** The month's days, a row per week. */
+@Composable
+private fun Ruudukko(
+    state: OirepaivakirjaUiState,
+    style: TextStyle,
+    onSelect: (LocalDate) -> Unit
+) {
+    Column(Modifier.selectableGroup()) {
+        state.viikot.forEach { viikko ->
+            Row(Modifier.fillMaxWidth()) {
+                viikko.forEach { day ->
+                    Paiva(
+                        day = day,
+                        selected = day == state.valittu,
+                        today = day == state.tanaan,
+                        valmis = day in state.valmiit,
+                        oire = day in state.oirePaivat,
+                        style = style,
+                        onSelect = onSelect,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }
@@ -460,17 +520,26 @@ private fun KuukausiOtsikko(kuukausi: YearMonth, onPrevious: () -> Unit, onNext:
                 },
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val kuukausiStyle = MaterialTheme.typography.headlineMedium
+            val vuosiStyle =
+                MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Normal)
             Text(
                 text = formatMonthTitle(kuukausi.atDay(1)),
-                style = MaterialTheme.typography.headlineMedium,
+                style = kuukausiStyle,
                 color = Color.Black,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.weight(1f)
+                softWrap = false,
+                autoSize = yhdelleRiville(kuukausiStyle.fontSize),
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = MONTH_TO_YEAR)
             )
             Text(
                 text = kuukausi.year.toString(),
-                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Normal),
-                color = Color.Black
+                style = vuosiStyle,
+                color = Color.Black,
+                softWrap = false,
+                autoSize = yhdelleRiville(vuosiStyle.fontSize)
             )
         }
     }
@@ -489,18 +558,22 @@ private fun Nuoli(icon: Int, description: String, onClick: () -> Unit) {
     )
 }
 
-/** "ma ti ke to pe la su" (25sp). Decorative for TalkBack: each day reads its own weekday. */
+/**
+ * "ma ti ke to pe la su" in the grid's [style] (25sp, see [ruudukonTyyli]). Decorative for
+ * TalkBack: each day reads its own weekday.
+ */
 @Composable
-private fun Viikonpaivat() {
+private fun Viikonpaivat(style: TextStyle) {
     // Any Monday works: only the weekday names are used.
     val monday = LocalDate.of(2024, 1, 1)
     Row(Modifier.fillMaxWidth().clearAndSetSemantics {}) {
         (0L until 7L).forEach { offset ->
             Text(
                 text = formatWeekdayShort(monday.plusDays(offset)),
-                style = MaterialTheme.typography.headlineSmall,
+                style = style,
                 color = Color.Black,
                 textAlign = TextAlign.Center,
+                softWrap = false,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -508,7 +581,7 @@ private fun Viikonpaivat() {
 }
 
 /**
- * One date (25sp), or an empty cell outside the month. The selected date is Bold white on a
+ * One date in the grid's [style] (25sp), or an empty cell outside the month. The selected date is Bold white on a
  * 40dp primary square. A complete day ([valmis]) has the Figma check icon in the square's
  * corner: a shape, so colour isn't the only signal. TalkBack reads
  * "torstai 18.12.2025", plus ", tänään" for today and ", kaikki lääkkeet otettu" when complete.
@@ -520,6 +593,7 @@ private fun Paiva(
     today: Boolean,
     valmis: Boolean,
     oire: Boolean,
+    style: TextStyle,
     onSelect: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -546,10 +620,11 @@ private fun Paiva(
         ) {
             Text(
                 text = day.dayOfMonth.toString(),
-                style = MaterialTheme.typography.headlineSmall,
+                style = style,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 color = if (selected) Color.White else Color.Black,
                 textAlign = TextAlign.Center,
+                softWrap = false,
                 modifier = Modifier.clearAndSetSemantics {}
             )
             if (valmis) {

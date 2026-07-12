@@ -21,6 +21,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarDuration
@@ -94,6 +95,7 @@ private val TOP = 45.dp
 private val STRIP_EDGE = 1.dp
 private val DAY_CELL = 50.dp
 private val DAY_RADIUS = 20.dp
+private val DAY_MIN_FONT = 12.sp
 private val STRIP_TO_HEADER = 19.dp
 private val HEADER_TO_LIST = 88.dp
 private val HEADER_TO_PROGRESS = 25.dp
@@ -183,7 +185,8 @@ fun EtusivuScreen(
 /**
  * This week, Monday to Sunday ("to" over "18"), with [paiva] selected. A cell is a 50dp touch
  * target, and TalkBack reads it as "torstai 18.12., tänään" with its selected state. Under 352dp
- * of width the cells share it equally instead of squeezing Sunday.
+ * of width the cells share it equally instead of squeezing Sunday. With a large
+ * font on a narrow screen the text shrinks to fit instead of breaking "ma" into "m" / "a".
  */
 @Composable
 private fun Viikko(
@@ -222,6 +225,11 @@ private fun Viikko(
                     style = style,
                     color = if (selected) Color.White else Color.Black,
                     textAlign = TextAlign.Center,
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = DAY_MIN_FONT,
+                        maxFontSize = style.fontSize
+                    ),
                     modifier = Modifier.clearAndSetSemantics {}
                 )
             }
