@@ -37,7 +37,10 @@ const val EI_SIVUOIRE = 0L
 data class LisaaOireUiState(
     /** The active medications a symptom can be linked to, in Finnish name order. */
     val laakkeet: List<Laake> = emptyList(),
-    /** The picked side effect: a medication id, [EI_SIVUOIRE], or null before any pick. */
+    /**
+     * The picked side effect: an id in [laakkeet], [EI_SIVUOIRE], or null before any pick (or
+     * when the picked medication is no longer active).
+     */
     val sivuoire: Long? = null,
     val aloituspv: LocalDate = LocalDate.MIN,
     val lopetuspv: LocalDate? = null,
@@ -100,8 +103,14 @@ class LisaaOireViewModel(
         kuvausPuuttuu,
         saveState
     ) { state, list, missing, save ->
+        val laakkeet = list.getOrDefault(emptyList())
         state.copy(
-            laakkeet = list.getOrDefault(emptyList()),
+            laakkeet = laakkeet,
+            // A pick that's no longer an active medication (or can't be loaded) isn't shown,
+            // so it isn't saved either.
+            sivuoire = state.sivuoire?.takeIf { id ->
+                id == EI_SIVUOIRE || laakkeet.any { it.laakeId == id }
+            },
             loadError = list.isFailure,
             kuvausPuuttuu = missing,
             lopetusEnnenAloitusta = !isValidDateRange(state.aloituspv, state.lopetuspv),
@@ -142,7 +151,8 @@ class LisaaOireViewModel(
         if (kuvaus.isBlank() || !isValidDateRange(aloituspv, lopetuspv)) return
         val merkinta = Oiremerkinta(
             kuvaus = kuvaus.trim(),
-            laakeId = handle.get<Long>(KEY_SIVUOIRE)?.takeIf { it != EI_SIVUOIRE },
+            // What the dropdown shows, not the raw pick (see uiState).
+            laakeId = uiState.value.sivuoire?.takeIf { it != EI_SIVUOIRE },
             aloituspv = aloituspv,
             lopetuspv = lopetuspv
         )
