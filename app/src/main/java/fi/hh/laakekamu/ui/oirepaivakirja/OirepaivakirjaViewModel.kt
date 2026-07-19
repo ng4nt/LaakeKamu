@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.stateIn
@@ -160,6 +161,13 @@ class OirepaivakirjaViewModel(
             poistettava = state.oireet.find { it.merkintaId == poistettava },
             poistonTulos = tulos
         )
+    }.onEach { state ->
+        // Once read, a pending symptom that isn't there (deleted elsewhere, or a failed read)
+        // is forgotten, so the dialog can't come back later on its own.
+        val pending = handle.get<Long>(KEY_POISTETTAVA)
+        if (pending != null && state.poistettava == null && !state.loading) {
+            handle[KEY_POISTETTAVA] = null
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), current().toUiState())
 
     /** Selects [day] and shows its month. */
@@ -195,8 +203,11 @@ class OirepaivakirjaViewModel(
 
     /** "Poista" in the dialog: deletes the symptom for good (a hard delete). */
     fun confirmDelete() {
-        val rivi = uiState.value.poistettava ?: return
+        // Read and cleared from the handle at once: uiState updates a moment later, so a
+        // second quick tap must not find the row there (a second delete).
+        val id = handle.get<Long>(KEY_POISTETTAVA) ?: return
         handle[KEY_POISTETTAVA] = null
+        val rivi = uiState.value.oireet.find { it.merkintaId == id } ?: return
         viewModelScope.launch {
             val onnistui = try {
                 oireRepository.delete(rivi.merkinta)

@@ -21,8 +21,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -291,6 +293,40 @@ class OirepaivakirjaViewModelTest {
     }
 
     @Test
+    fun aDoubleTapOnPoista_deletesOnce() = runTest {
+        // uiState lags the taps here, as on a device, where they're separate frames.
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val vm = viewModel(repo)
+        backgroundScope.launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+        vm.requestDelete(vm.uiState.value.oireet.single())
+        advanceUntilIdle()
+
+        vm.confirmDelete()
+        vm.confirmDelete()
+        advanceUntilIdle()
+
+        assertEquals(1, repo.deletes)
+        assertEquals(1L, vm.uiState.value.poistonTulos?.id)
+    }
+
+    @Test
+    fun aPendingSymptomThatGoesAway_doesntReopenTheDialogLater() = runTest {
+        val repo = FakeRepository()
+        repo.oireet.value = listOf(huimaus)
+        val vm = collecting(viewModel(repo))
+        vm.requestDelete(vm.uiState.value.oireet.single())
+
+        repo.oireet.value = emptyList()
+        assertEquals(null, vm.uiState.value.poistettava)
+        repo.oireet.value = listOf(huimaus)
+
+        assertEquals(null, vm.uiState.value.poistettava)
+    }
+
+    @Test
     fun thePendingDeletion_survivesProcessDeath() = runTest {
         val repo = FakeRepository()
         repo.oireet.value = listOf(huimaus)
@@ -379,6 +415,7 @@ class OirepaivakirjaViewModelTest {
         val otot = MutableStateFlow(otot)
         val oireet = MutableStateFlow(emptyList<Oiremerkinta>())
         var lastMonthRead: YearMonth? = null
+        var deletes = 0
 
         override fun observeLaakkeet(): Flow<List<Laake>> = flow {
             if (failures > 0) {
@@ -401,6 +438,7 @@ class OirepaivakirjaViewModelTest {
         override suspend fun update(merkinta: Oiremerkinta) = error("not used")
 
         override suspend fun delete(merkinta: Oiremerkinta) {
+            deletes++
             if (failDeletes) error("database unavailable")
             oireet.value = oireet.value.filter { it.merkintaId != merkinta.merkintaId }
         }
