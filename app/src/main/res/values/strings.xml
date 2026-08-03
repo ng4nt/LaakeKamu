@@ -64,6 +64,19 @@
     <string name="laakelista_tyhja">Lääkelista on tyhjä. Lisää ensimmäinen lääke Lisää-painikkeesta.</string>
     <string name="virhe_lista">Lääkelistaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
 
+    <!-- Muokkaa lääkettä -->
+    <string name="haluan_muokata">Haluan muokata lääkettä</string>
+    <string name="valitse">Valitse</string>
+    <string name="poista_laake">Poista lääke</string>
+    <string name="poista_laake_otsikko">Poistetaanko %1$s?</string>
+    <string name="poista_laake_teksti">Lääke poistuu lääkelistasta ja etusivulta. Aiemmat merkinnät säilyvät oirepäiväkirjassa.</string>
+    <string name="laake_poistettu">Lääke poistettu</string>
+    <string name="virhe_laake_poisto">Lääkettä ei voitu poistaa. Yritä uudelleen.</string>
+    <string name="virhe_muokkaa_lataus">Lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_muokattava_lataus">Lääkettä ei voitu avata muokattavaksi. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_lopetus_menneisyydessa">Lopetuspäivä ei voi olla menneisyydessä.</string>
+    <string name="muutokset_tallennettu">Muutokset tallennettu</string>
+
     <!-- Etusivu -->
     <string name="ei_laakkeita_paivalle">Ei lääkkeitä tälle päivälle</string>
     <string name="lisaa_laake">Lisää lääke</string>

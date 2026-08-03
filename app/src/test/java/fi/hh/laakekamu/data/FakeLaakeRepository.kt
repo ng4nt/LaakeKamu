@@ -36,6 +36,12 @@ class FakeLaakeRepository(
     /** When set, [nameError] fails, as when the database is lost between two calls. */
     var nameErrorFails = false
 
+    /** When set, [delete] fails, as when the database can't be written. */
+    var deleteFails = false
+
+    /** The ids passed to [delete], in order. */
+    val deleted = mutableListOf<Long>()
+
     override fun observeTyypit(): Flow<List<Tyyppi>> = if (failChoices) {
         flow { throw IllegalStateException("database unavailable") }
     } else {
@@ -52,7 +58,22 @@ class FakeLaakeRepository(
 
     override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = currentTimes
 
-    override suspend fun currentTimes(laakeId: Long): List<Muistutus> = emptyList()
+    /** The current reminders [currentTimes] returns, by medication id. */
+    val currentReminders = mutableMapOf<Long, List<Muistutus>>()
+
+    /** When set, [get] fails, as when the database can't be opened. */
+    var getFails = false
+
+    /** The medications and times passed to [update], in order. */
+    val updated = mutableListOf<Pair<Laake, List<EditedTime>>>()
+
+    override suspend fun get(laakeId: Long): Laake? {
+        check(!getFails) { "database unavailable" }
+        return laakkeet.value.find { it.laakeId == laakeId }
+    }
+
+    override suspend fun currentTimes(laakeId: Long): List<Muistutus> =
+        currentReminders[laakeId].orEmpty()
 
     override suspend fun nameError(name: String, editedId: Long?): NameError? {
         nameErrorGate?.await()
@@ -81,10 +102,13 @@ class FakeLaakeRepository(
     }
 
     override suspend fun update(laake: Laake, times: List<EditedTime>) {
+        updated += laake to times
         laakkeet.value = laakkeet.value.map { if (it.laakeId == laake.laakeId) laake else it }
     }
 
     override suspend fun delete(laakeId: Long): List<Long> {
+        if (deleteFails) throw IllegalStateException("database unavailable")
+        deleted += laakeId
         laakkeet.value =
             laakkeet.value.map { if (it.laakeId == laakeId) it.copy(aktiivinen = false) else it }
         return emptyList()

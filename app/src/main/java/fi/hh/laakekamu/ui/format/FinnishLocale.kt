@@ -11,6 +11,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 
 /**
+ * This context with Finnish resources whatever the device language. MainActivity uses it for the
+ * whole app: every text is Finnish, and `%d` in a string resource formats its digits with
+ * the resources' locale, so a Persian phone would otherwise show "Edistys ۰ %".
+ */
+fun Context.withFinnishResources(): Context =
+    createConfigurationContext(Configuration(resources.configuration).apply { setLocale(SUOMI) })
+
+/**
  * Gives [content] a Finnish [LocalConfiguration] and [LocalContext] whatever the device language
  *. The M3 pickers read their locale (month names, weekdays, Monday first) from the
  * configuration and their own texts ("Valittu päivämäärä", "Tunti") from the context's

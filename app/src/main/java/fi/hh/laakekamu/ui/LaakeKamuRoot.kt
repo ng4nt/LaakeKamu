@@ -26,8 +26,10 @@ import fi.hh.laakekamu.R
 import fi.hh.laakekamu.ui.etusivu.EtusivuScreen
 import fi.hh.laakekamu.ui.laakelista.LaakelistaScreen
 import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeScreen
+import fi.hh.laakekamu.ui.lisaalaake.LisaaLaakeViewModel
 import fi.hh.laakekamu.ui.lisaaoire.LisaaOireScreen
 import fi.hh.laakekamu.ui.lisaaoire.LisaaOireViewModel
+import fi.hh.laakekamu.ui.muokkaalaake.MuokkaaLaakettaScreen
 import fi.hh.laakekamu.ui.navigation.BottomNavBar
 import fi.hh.laakekamu.ui.navigation.FormRoute
 import fi.hh.laakekamu.ui.navigation.MainDestination
@@ -80,13 +82,28 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                         }
                     }
                 }
+                SavedFlagSnackbar(
+                    handle,
+                    KEY_LAAKE_POISTETTU,
+                    stringResource(R.string.laake_poistettu),
+                    snackbarHostState
+                )
+                SavedFlagSnackbar(
+                    handle,
+                    KEY_LAAKE_MUOKATTU,
+                    stringResource(R.string.muutokset_tallennettu),
+                    snackbarHostState
+                )
                 LaakelistaScreen(
                     onAdd = {
                         // A double tap mustn't push two wizards.
                         navController.navigate(FormRoute.LISAA_LAAKE) { launchSingleTop = true }
                     },
-                    // The edit selector is not built yet.
-                    onEdit = {}
+                    onEdit = {
+                        navController.navigate(FormRoute.MUOKKAA_LAAKETTA) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
             composable(MainDestination.ETUSIVU.route) {
@@ -130,6 +147,43 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                     }
                 )
             }
+            composable(FormRoute.MUOKKAA_LAAKETTA) { entry ->
+                MuokkaaLaakettaScreen(
+                    onClose = dropUnlessResumed { navController.popBackStack() },
+                    onDeleted = {
+                        // Only while the selector is on top, as for the symptom form above.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            navController.popBackStack()
+                            navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                                .savedStateHandle[KEY_LAAKE_POISTETTU] = true
+                        }
+                    },
+                    onEdit = { laakeId ->
+                        navController.navigate(FormRoute.muokkaaLaake(laakeId)) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+            composable(
+                FormRoute.MUOKKAA_LAAKE,
+                arguments = listOf(
+                    navArgument(LisaaLaakeViewModel.ARG_LAAKE_ID) { type = NavType.LongType }
+                )
+            ) { entry ->
+                LisaaLaakeScreen(
+                    onClose = dropUnlessResumed { navController.popBackStack() },
+                    onSaved = {
+                        // Only while the wizard is on top, as for the symptom form above.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            // Back to the list past the selector, as after a delete.
+                            navController.popBackStack(MainDestination.LAAKELISTA.route, false)
+                            navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                                .savedStateHandle[KEY_LAAKE_MUOKATTU] = true
+                        }
+                    }
+                )
+            }
             composable(FormRoute.LISAA_LAAKE) { entry ->
                 LisaaLaakeScreen(
                     // A double tap mustn't pop the list too.
@@ -152,6 +206,12 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
 
 /** Lääkelista's saved-state flag: show "Lääke lisätty". */
 private const val KEY_LAAKE_LISATTY = "laakeLisatty"
+
+/** Lääkelista's saved-state flag: show "Lääke poistettu". */
+private const val KEY_LAAKE_POISTETTU = "laakePoistettu"
+
+/** Lääkelista's saved-state flag: show "Muutokset tallennettu" (the default text). */
+private const val KEY_LAAKE_MUOKATTU = "laakeMuokattu"
 
 /** Oirepäiväkirja's saved-state flag: show "Oire tallennettu". */
 private const val KEY_OIRE_TALLENNETTU = "oireTallennettu"

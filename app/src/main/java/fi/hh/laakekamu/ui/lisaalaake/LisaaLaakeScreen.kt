@@ -67,8 +67,9 @@ private val CROSS_SIZE = 18.dp
 private val CROSS_STROKE = 2.5.dp
 
 /**
- * The add medication wizard. [onClose] leaves it ("Takaisin" on step 1); [onSaved] runs once
- * the medication is saved.
+ * The add medication wizard, also used to edit one (the ViewModel's laakeId
+ * argument). [onClose] leaves it ("Takaisin" on step 1); [onSaved] runs once the medication is
+ * saved.
  */
 @Composable
 fun LisaaLaakeScreen(
@@ -100,10 +101,32 @@ fun LisaaLaakeScreen(
         .fillMaxSize()
         .verticalScroll(rememberScrollState())
         .padding(start = 16.dp, end = 16.dp, top = TOP_PADDING, bottom = 32.dp)
-    if (state.step == 1) {
+    if (state.loading) {
+        // Editing: the form appears once the medication is read (a few ms), so nothing is
+        // typed into fields that the pre-fill would then overwrite.
+        return
+    }
+    if (state.editLoadError) {
+        EditLoadError(onClose, modifier.then(content))
+    } else if (state.step == 1) {
         Step1(state, viewModel, onClose, modifier.then(content))
     } else {
         Step2(state, viewModel, modifier.then(content))
+    }
+}
+
+/** Editing: the medication couldn't be read (deleted meanwhile, or the database). */
+@Composable
+private fun EditLoadError(onClose: () -> Unit, modifier: Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = stringResource(R.string.virhe_muokattava_lataus),
+            style = MaterialTheme.typography.bodyMedium,
+            color = LkDanger,
+            modifier = Modifier.widthIn(max = FORM_WIDTH).fillMaxWidth()
+        )
+        Spacer(Modifier.height(FIELD_GAP))
+        LkBackButton(stringResource(R.string.takaisin), onClick = onClose)
     }
 }
 
@@ -234,10 +257,14 @@ private fun Step2(state: LisaaLaakeUiState, viewModel: LisaaLaakeViewModel, modi
             label = stringResource(R.string.lopetuspaiva_label),
             date = state.lopetuspv,
             onDateChange = viewModel::onLopetuspvChange,
-            error = if (state.step2Errors.lopetuspv) {
-                stringResource(R.string.virhe_lopetus_ennen_aloitusta)
-            } else {
-                null
+            error = when {
+                state.step2Errors.lopetuspv -> stringResource(
+                    R.string.virhe_lopetus_ennen_aloitusta
+                )
+                state.step2Errors.lopetuspvMennyt -> {
+                    stringResource(R.string.virhe_lopetus_menneisyydessa)
+                }
+                else -> null
             },
             clearable = true,
             hint = state.kesto?.let { kestoTeksti(it) }

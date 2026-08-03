@@ -71,6 +71,9 @@ class RoomLaakeRepository(
             .mapValues { (_, times) -> times.sorted() }
     }
 
+    /** The medication with [laakeId], also a deleted one, or null (for the edit wizard). */
+    override suspend fun get(laakeId: Long): Laake? = database().laakeDao().getById(laakeId)
+
     /** The current reminder times of a medication (for pre-filling the edit wizard). */
     override suspend fun currentTimes(laakeId: Long): List<Muistutus> =
         database().muistutusDao().getCurrentByLaake(laakeId)
