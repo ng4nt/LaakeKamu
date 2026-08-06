@@ -133,23 +133,30 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                 arguments = listOf(
                     navArgument(LisaaOireViewModel.ARG_ALKAA) { type = NavType.LongType }
                 )
-            ) {
+            ) { entry ->
                 LisaaOireScreen(
                     onClose = dropUnlessResumed { navController.popBackStack() },
                     onSaved = {
-                        navController.popBackStack()
-                        navController.getBackStackEntry(MainDestination.OIREPAIVAKIRJA.route)
-                            .savedStateHandle[KEY_OIRE_TALLENNETTU] = true
+                        // Takaisin during the save has already left the form; popping again
+                        // would leave the diary too.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            navController.popBackStack()
+                            navController.getBackStackEntry(MainDestination.OIREPAIVAKIRJA.route)
+                                .savedStateHandle[KEY_OIRE_TALLENNETTU] = true
+                        }
                     }
                 )
             }
-            composable(FormRoute.MUOKKAA_LAAKETTA) {
+            composable(FormRoute.MUOKKAA_LAAKETTA) { entry ->
                 MuokkaaLaakettaScreen(
                     onClose = dropUnlessResumed { navController.popBackStack() },
                     onDeleted = {
-                        navController.popBackStack()
-                        navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
-                            .savedStateHandle[KEY_LAAKE_POISTETTU] = true
+                        // Only while the selector is on top, as for the symptom form above.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            navController.popBackStack()
+                            navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                                .savedStateHandle[KEY_LAAKE_POISTETTU] = true
+                        }
                     },
                     onEdit = { laakeId ->
                         navController.navigate(FormRoute.muokkaaLaake(laakeId)) {
@@ -163,27 +170,33 @@ fun LaakeKamuRoot(navController: NavHostController = rememberNavController()) {
                 arguments = listOf(
                     navArgument(LisaaLaakeViewModel.ARG_LAAKE_ID) { type = NavType.LongType }
                 )
-            ) {
+            ) { entry ->
                 LisaaLaakeScreen(
                     onClose = dropUnlessResumed { navController.popBackStack() },
                     onSaved = {
-                        // Back to the list past the selector, as after a delete.
-                        navController.popBackStack(MainDestination.LAAKELISTA.route, false)
-                        navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
-                            .savedStateHandle[KEY_LAAKE_MUOKATTU] = true
+                        // Only while the wizard is on top, as for the symptom form above.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            // Back to the list past the selector, as after a delete.
+                            navController.popBackStack(MainDestination.LAAKELISTA.route, false)
+                            navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                                .savedStateHandle[KEY_LAAKE_MUOKATTU] = true
+                        }
                     }
                 )
             }
-            composable(FormRoute.LISAA_LAAKE) {
+            composable(FormRoute.LISAA_LAAKE) { entry ->
                 LisaaLaakeScreen(
                     // A double tap mustn't pop the list too.
                     onClose = dropUnlessResumed { navController.popBackStack() },
                     onSaved = {
-                        // Pop first, so the wizard isn't saved into the list tab's back stack.
-                        navController.popBackStack()
-                        navController.navigateToTab(MainDestination.LAAKELISTA)
-                        navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
-                            .savedStateHandle[KEY_LAAKE_LISATTY] = true
+                        // Only while the wizard is on top, as for the symptom form above.
+                        if (navController.currentBackStackEntry?.id == entry.id) {
+                            // Pop first, so the wizard isn't saved into the list tab's back stack.
+                            navController.popBackStack()
+                            navController.navigateToTab(MainDestination.LAAKELISTA)
+                            navController.getBackStackEntry(MainDestination.LAAKELISTA.route)
+                                .savedStateHandle[KEY_LAAKE_LISATTY] = true
+                        }
                     }
                 )
             }

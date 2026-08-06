@@ -169,16 +169,31 @@ class LisaaOireViewModelTest {
     }
 
     @Test
+    fun aPickThatIsNoLongerActive_isShownAsNoPick_andSavedWithoutALink() = runTest {
+        val repo = FakeRepository(listOf(laake(1, "A aamulääke")))
+        val vm = collecting(viewModel(repo))
+        vm.onKuvausChange("Huimaus")
+        vm.onSivuoireSelect(1)
+
+        repo.laakkeet.value = emptyList()
+        assertNull(vm.uiState.value.sivuoire)
+        vm.onDone()
+
+        assertEquals(listOf<Long?>(null), repo.added.map { it.laakeId })
+    }
+
+    @Test
     fun theForm_survivesProcessDeath() = runTest {
+        val repo = FakeRepository(listOf(laake(1, "A")))
         val handle = SavedStateHandle(mapOf(LisaaOireViewModel.ARG_ALKAA to selected.toEpochDay()))
-        val vm = viewModel(FakeRepository(listOf(laake(1, "A"))), handle)
+        val vm = viewModel(repo, handle)
         vm.onKuvausChange("Huimaus")
         vm.onSivuoireSelect(1)
         vm.onAloituspvChange(selected.minusDays(3))
         vm.onLopetuspvChange(selected)
 
         val saved = handle.keys().associateWith { handle.get<Any?>(it) }
-        val restored = collecting(viewModel(handle = SavedStateHandle(saved)))
+        val restored = collecting(viewModel(repo, SavedStateHandle(saved)))
 
         assertEquals("Huimaus", restored.kuvaus)
         val state = restored.uiState.value
@@ -219,7 +234,7 @@ class LisaaOireViewModelTest {
         private val failLoad: Boolean = false,
         val gate: CompletableDeferred<Unit>? = null
     ) : OireRepository {
-        private val laakkeet = MutableStateFlow(laakkeet)
+        val laakkeet = MutableStateFlow(laakkeet)
         val added = mutableListOf<Oiremerkinta>()
 
         override fun observeAll(): Flow<List<Oiremerkinta>> = MutableStateFlow(added.toList())
