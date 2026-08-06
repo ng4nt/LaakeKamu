@@ -25,8 +25,5 @@ val LkOnLight = Color(0xFF373737)
 /** Placeholder text (70 % black). */
 val LkPlaceholder = Color(0xB3000000)
 
-/** Splash screen background. */
-val LkSplashBg = Color(0xFF37579D)
-
 /** Not in Figma: labels and ended medications (7.46:1 on white). */
 val LkMuted = Color(0xFF555555)
