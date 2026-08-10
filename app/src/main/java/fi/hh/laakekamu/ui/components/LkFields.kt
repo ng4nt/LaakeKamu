@@ -6,7 +6,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,8 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -75,6 +79,10 @@ private val LABEL_GAP = 8.dp
 private val TEXT_INSET = 13.dp
 private val DROPDOWN_INSET = 9.dp
 private val CARET_SIZE = 30.dp
+
+// The time dialog's content: M3 pads it 24dp a side, plus 16dp to each screen edge.
+private val TIME_DIALOG_INSET = 80.dp
+private val TIME_DIALOG_MAX = 360.dp
 
 // M3's disabled content alpha.
 private const val DISABLED_ALPHA = 0.38f
@@ -354,8 +362,13 @@ fun LkDateField(
                             )
                         )
                     ) {
+                        // M3 caps the dialog at 568dp, and at 200 % font the buttons wrap to two
+                        // lines, which leaves the picker less than its fixed grid height: the grid
+                        // then spilled over the weekday row (the first week drawn on "T P L S").
+                        // Scrolling gives the grid its full height and keeps the buttons in view.
                         DatePicker(
                             state = state,
+                            modifier = Modifier.verticalScroll(rememberScrollState()),
                             title = {
                                 Text(
                                     text = stringResource(R.string.valitse_paiva),
@@ -415,11 +428,18 @@ fun LkTimeField(
             var mode by remember { mutableStateOf(TimePickerDisplayMode.Input) }
             TimePickerDialog(
                 onDismissRequest = { open = false },
+                // Peruuta and OK share one flow in the confirm slot, so at 200 % font OK moves
+                // to its own line instead of breaking into "O" / "K".
                 confirmButton = {
-                    TextButton(onClick = {
-                        onTimeChange(state.hour * 60 + state.minute)
-                        open = false
-                    }) { Text(stringResource(R.string.ok)) }
+                    FlowRow(horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { open = false }) {
+                            Text(stringResource(R.string.peruuta))
+                        }
+                        TextButton(onClick = {
+                            onTimeChange(state.hour * 60 + state.minute)
+                            open = false
+                        }) { Text(stringResource(R.string.ok)) }
+                    }
                 },
                 title = { Text(stringResource(R.string.valitse_aika)) },
                 modeToggleButton = {
@@ -436,15 +456,26 @@ fun LkTimeField(
                             displayMode = mode
                         )
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        open = false
-                    }) { Text(stringResource(R.string.peruuta)) }
                 }
             ) {
                 ProvideFinnishLocale {
-                    if (mode == TimePickerDisplayMode.Input) TimeInput(state) else TimePicker(state)
+                    // M3 gives the button row only the content's width (material3 1.4.0
+                    // TimePickerCustomLayout). With a TimeInput-wide row, 200 % font squeezed OK
+                    // into a clipped "O" / "K". So the content is at least as wide as the screen
+                    // allows (less M3's 24dp padding a side and a 16dp margin), up to 360dp.
+                    BoxWithConstraints(Modifier.align(Alignment.CenterHorizontally)) {
+                        val minWidth = minOf(maxWidth - TIME_DIALOG_INSET, TIME_DIALOG_MAX)
+                        Box(
+                            Modifier.widthIn(min = minWidth),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (mode == TimePickerDisplayMode.Input) {
+                                TimeInput(state)
+                            } else {
+                                TimePicker(state)
+                            }
+                        }
+                    }
                 }
             }
         }
