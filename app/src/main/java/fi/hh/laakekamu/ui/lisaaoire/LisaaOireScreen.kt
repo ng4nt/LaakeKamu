@@ -53,11 +53,16 @@ fun LisaaOireScreen(
     // Leave once saved, also when the process was restored after the save.
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
 
+    // At a big font "Valmis!" is below the first field: when it finds "Oire" empty, scroll up so
+    // the error shows.
+    val scroll = rememberScrollState()
+    LaunchedEffect(state.kuvausPuuttuu) { if (state.kuvausPuuttuu) scroll.animateScrollTo(0) }
+
     val eiSivuoire = stringResource(R.string.ei_sivuoire)
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scroll)
             .padding(start = 16.dp, end = 16.dp, top = TOP_PADDING, bottom = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

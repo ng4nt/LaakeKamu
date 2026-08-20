@@ -25,6 +25,10 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -97,9 +101,20 @@ fun LisaaLaakeScreen(
         }
     }
 
+    // One scroll state per step: at a big font step 1 is left scrolled to its buttons, and a
+    // shared state would open step 2 with its first field above the screen.
+    val scroll = key(state.step) { rememberScrollState() }
+    // At a big font the buttons are below the screen's first fields: when a tap finds a new
+    // error up there ("Valitse aika."), scroll up to it. Errors that clear don't move the form.
+    val upper = upperErrors(state)
+    var shown by remember(state.step) { mutableStateOf(upper) }
+    LaunchedEffect(upper) {
+        if (!shown.containsAll(upper)) scroll.animateScrollTo(0)
+        shown = upper
+    }
     val content = Modifier
         .fillMaxSize()
-        .verticalScroll(rememberScrollState())
+        .verticalScroll(scroll)
         .padding(start = 16.dp, end = 16.dp, top = TOP_PADDING, bottom = 32.dp)
     if (state.loading) {
         // Editing: the form appears once the medication is read (a few ms), so nothing is
@@ -112,6 +127,22 @@ fun LisaaLaakeScreen(
         Step1(state, viewModel, onClose, modifier.then(content))
     } else {
         Step2(state, viewModel, modifier.then(content))
+    }
+}
+
+/** The errors of the step's upper fields; Lopetuspäivä's is next to the buttons anyway. */
+private fun upperErrors(state: LisaaLaakeUiState): Set<String> = if (state.step == 1) {
+    with(state.errors) {
+        setOfNotNull(
+            "nimi".takeIf { nimi != null },
+            "tyyppi".takeIf { tyyppi },
+            "annosmaara".takeIf { annosmaara },
+            "yksikko".takeIf { yksikko }
+        )
+    }
+} else {
+    with(state.step2Errors) {
+        ajat.keys.map { "aika$it" }.toSet() + setOfNotNull("kuinkaUsein".takeIf { kuinkaUsein })
     }
 }
 

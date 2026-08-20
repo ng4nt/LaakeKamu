@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -59,6 +60,7 @@ private val SECTION_GAP = 84.dp
 private val BUTTONS_START = 34.dp
 private val BUTTONS_END = 19.dp
 private val BUTTONS_BOTTOM = 56.dp
+private val BUTTONS_GAP = 12.dp
 
 /**
  * Lääkelista: daily medications by time, as-needed ones, labels and ended ones
@@ -101,11 +103,14 @@ fun LaakelistaScreen(
                 }
             }
         }
-        Row(
+        // A flow, not a Row: at 200 % font on a 360dp phone both buttons don't fit side by side,
+        // and a Row would squeeze "Muokkaa" until it breaks inside the word.
+        FlowRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = BUTTONS_START, end = BUTTONS_END, bottom = BUTTONS_BOTTOM),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(BUTTONS_GAP)
         ) {
             LkSmallButton(stringResource(R.string.lisaa), onClick = onAdd, filled = true)
             LkSmallButton(

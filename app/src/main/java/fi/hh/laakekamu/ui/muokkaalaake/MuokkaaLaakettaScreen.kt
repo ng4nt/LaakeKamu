@@ -47,6 +47,7 @@ private val ICON_SIZE = 100.dp
 private val ICON_GAP = 25.dp
 private val FIELD_GAP = 60.dp
 private val BUTTON_GAP = 46.dp
+private val BACK_GAP = 16.dp
 private val BOTTOM_PADDING = 47.dp
 private val FORM_WIDTH = 310.dp
 
@@ -149,8 +150,11 @@ private fun MuokkaaLaakettaContent(
                     modifier = Modifier.widthIn(max = FORM_WIDTH).fillMaxWidth()
                 )
             }
-            Spacer(Modifier.height(BUTTON_GAP))
+            Spacer(Modifier.height(BUTTON_GAP - BACK_GAP))
         }
+        // Part of the gap stays outside the scroll: at 200 % font the form scrolls, and a
+        // half-shown "Poista lääke" would otherwise touch "Takaisin".
+        Spacer(Modifier.height(BACK_GAP))
         LkBackButton(stringResource(R.string.takaisin), onClick = onClose)
     }
 }
