@@ -25,14 +25,15 @@ class FinnishResourcesTest {
     @Test
     fun persianResources_formatPersianDigits() {
         // The problem itself, so the next test proves the fix and not a quiet device.
-        assertEquals("۵ %", app.inLanguage("fa").getString(R.string.prosentti, 5))
+        assertEquals("۵ %", app.inLanguage("fa").getString(R.string.prosentti, 5))
     }
 
     @Test
     fun withFinnishResources_formatsLatinDigits_onAPersianDevice() {
         val context = app.inLanguage("fa").withFinnishResources()
 
-        assertEquals("5 %", context.getString(R.string.prosentti, 5))
+        // The resource keeps "5 %" together with a no-break space.
+        assertEquals("5 %", context.getString(R.string.prosentti, 5))
         assertEquals(Locale.forLanguageTag("fi-FI"), context.resources.configuration.locales[0])
     }
 }
