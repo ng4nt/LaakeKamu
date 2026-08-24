@@ -89,6 +89,20 @@ class KuittaavaAnnosRepositoryTest {
         assertEquals(listOf(101L to true, 102L to false), ticks)
     }
 
+    /** Ticking yesterday's dose leaves today's notification, which has the same id. */
+    @Test
+    fun tickingAnotherDay_keepsTheShownNotification() = runBlocking {
+        post(101)
+        val repository = KuittaavaAnnosRepository(inner, context)
+
+        repository.setOtettu(101, today.minusDays(1), otettu = true)
+        // Waits the full timeout for a removal that must not come.
+        assertEquals(setOf(101), shownIdsWhen(emptySet()))
+
+        repository.setOtettu(101, today, otettu = true)
+        assertEquals(emptySet<Int>(), shownIdsWhen(emptySet()))
+    }
+
     private companion object {
         const val WAIT_MS = 2_000L
         const val POLL_MS = 50L

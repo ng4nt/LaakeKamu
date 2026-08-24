@@ -3,12 +3,14 @@ package fi.hh.laakekamu.reminders
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -26,6 +28,9 @@ object Ilmoitukset {
 
     /** The "open the app" notification's id; reminder ids start at 1, so it can't clash. */
     private const val TIETOKANTA_VIRHE_ID = 0
+
+    /** The day of a notification that carries none; it matches no dose day. */
+    private const val NO_DAY = Long.MIN_VALUE
 
     /**
      * Creates the "Lääkemuistutukset" channel with high importance, so a reminder pops up and
@@ -76,6 +81,7 @@ object Ilmoitukset {
             .setContentText(text)
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(julkinen(context))
+            .addExtras(Bundle().apply { putLong(AlarmReceiver.EXTRA_PAIVA, paiva.toEpochDay()) })
             .addAction(
                 0,
                 context.getString(R.string.ilmoitus_otettu),
@@ -93,6 +99,19 @@ object Ilmoitukset {
     /** Removes the reminder's notification: its dose was ticked or snoozed. */
     fun poista(context: Context, muistutusId: Long) {
         NotificationManagerCompat.from(context).cancel(muistutusId.toInt())
+    }
+
+    /**
+     * Removes the reminder's notification only while it is about the dose of [paiva]:
+     * ticking yesterday's dose on Etusivu leaves today's reminder, which has the same id, alone.
+     */
+    fun poistaPaivan(context: Context, muistutusId: Long, paiva: LocalDate) {
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return
+        val id = muistutusId.toInt()
+        val naytetty = manager.activeNotifications.firstOrNull { it.id == id && it.tag == null }
+        val extras = naytetty?.notification?.extras ?: return
+        val naytetynPaiva = extras.getLong(AlarmReceiver.EXTRA_PAIVA, NO_DAY)
+        if (naytetynPaiva == paiva.toEpochDay()) manager.cancel(id)
     }
 
     /** Removes every notification: "Aloita alusta" deleted the data they are about. */
