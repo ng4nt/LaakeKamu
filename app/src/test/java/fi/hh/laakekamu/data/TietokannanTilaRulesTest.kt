@@ -2,6 +2,7 @@ package fi.hh.laakekamu.data
 
 import java.io.IOException
 import java.security.GeneralSecurityException
+import java.security.InvalidKeyException
 import java.security.ProviderException
 import java.security.UnrecoverableKeyException
 import javax.crypto.AEADBadTagException
@@ -17,10 +18,10 @@ class TietokannanTilaRulesTest {
     @Test
     fun aLostOrBrokenKey_offersTheStartOver() {
         listOf(
-            UnrecoverableKeyException("Keystore key is missing"),
+            AvainPuuttuuException("Keystore key is missing"),
             AEADBadTagException(),
-            GeneralSecurityException("The encrypted database has no saved key"),
-            IllegalStateException("wrapped", UnrecoverableKeyException())
+            AvainPuuttuuException("The encrypted database has no saved key"),
+            IllegalStateException("wrapped", AvainPuuttuuException("gone"))
         ).forEach { assertEquals(TietokannanTila.EI_SAATAVILLA, tilaKunAvausEpaonnistui(it)) }
     }
 
@@ -29,6 +30,9 @@ class TietokannanTilaRulesTest {
         listOf(
             IOException("No space left on device"),
             ProviderException("Keystore operation failed"),
+            UnrecoverableKeyException("Keystore temporarily unavailable"),
+            InvalidKeyException("Key not usable right now"),
+            GeneralSecurityException("Some other security error"),
             UnsatisfiedLinkError("libsqlcipher.so"),
             IllegalStateException("The database key couldn't be saved")
         ).forEach {

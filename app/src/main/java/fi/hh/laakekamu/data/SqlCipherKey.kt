@@ -5,7 +5,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import java.security.KeyStore
 import java.security.SecureRandom
-import java.security.UnrecoverableKeyException
 import java.util.Base64
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -41,7 +40,7 @@ class SqlCipherKey(
         val iv = prefs.getString(IV, null)
         if (wrapped != null && iv != null) {
             val keystoreKey = keyStore().getKey(alias, null) as? SecretKey
-                ?: throw UnrecoverableKeyException("Keystore key $alias is missing")
+                ?: throw AvainPuuttuuException("Keystore key $alias is missing")
             val cipher = Cipher.getInstance(TRANSFORMATION)
             cipher.init(Cipher.DECRYPT_MODE, keystoreKey, GCMParameterSpec(TAG_BITS, decode(iv)))
             return cipher.doFinal(decode(wrapped))

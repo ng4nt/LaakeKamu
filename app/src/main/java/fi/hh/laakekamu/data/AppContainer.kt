@@ -6,7 +6,6 @@ import fi.hh.laakekamu.reminders.AjastavaLaakeRepository
 import fi.hh.laakekamu.reminders.Ilmoitukset
 import fi.hh.laakekamu.reminders.KuittaavaAnnosRepository
 import fi.hh.laakekamu.reminders.MuistutusScheduler
-import java.security.GeneralSecurityException
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -118,7 +117,7 @@ class AppContainer(
         val plaintext = SqlCipherSetup.isPlaintext(file)
         if (file.exists() && !plaintext && !key.isSaved()) {
             // The saved key is gone; a new one couldn't open the file, so don't make one.
-            throw GeneralSecurityException("The encrypted database has no saved key")
+            throw AvainPuuttuuException("The encrypted database has no saved key")
         }
         val passphrase = SqlCipherSetup.rawKeyPassphrase(key.getOrCreate())
         if (plaintext) {
