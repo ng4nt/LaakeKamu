@@ -136,7 +136,7 @@ class RepositoryTest {
         take(morning, today)
 
         // Morning moves to 9.00 after today's dose was taken; evening is removed; noon is added.
-        laakkeet.update(
+        val changed = laakkeet.update(
             laake().copy(laakeId = id),
             listOf(EditedTime(morning, 540), EditedTime(null, 720))
         )
@@ -149,6 +149,21 @@ class RepositoryTest {
         assertEquals(today, added.getValue(720).voimassaAlkaen)
         // Today's taken dose is still there.
         assertEquals(listOf(morning), db.laakkeenottoDao().takenOn(today, listOf(morning)))
+        // Both old reminders changed, so their notifications can be removed.
+        assertEquals(setOf(morning, evening), changed.toSet())
+    }
+
+    @Test
+    fun update_nameOnly_reportsNoChangedReminder() = runTest {
+        val id = laakkeet.add(laake(), listOf(480))
+        val reminder = reminders(id).single().muistutusId
+
+        val changed = laakkeet.update(
+            laake(nimi = "B aamulääke").copy(laakeId = id),
+            listOf(EditedTime(reminder, 480))
+        )
+
+        assertEquals(emptyList<Long>(), changed)
     }
 
     @Test
@@ -171,12 +186,15 @@ class RepositoryTest {
         val start = today.plusDays(3)
         val id = laakkeet.add(laake(aloituspv = start), listOf(480))
 
-        laakkeet.update(
+        val reminder = reminders(id).single().muistutusId
+
+        val changed = laakkeet.update(
             laake(aloituspv = today.plusDays(7)).copy(laakeId = id),
-            listOf(EditedTime(reminders(id).single().muistutusId, 480))
+            listOf(EditedTime(reminder, 480))
         )
 
         assertEquals(today.plusDays(7), reminders(id).single().voimassaAlkaen)
+        assertEquals(listOf(reminder), changed)
     }
 
     @Test

@@ -142,11 +142,11 @@ class AppContainer(
     }
 
     // Every medication change resets the reminder alarms; a delete also removes the medication's
-    // notifications and snoozes.
+    // notifications and snoozes, an edit those of the reminders it changed.
     val laakeRepository: LaakeRepository by lazy {
         AjastavaLaakeRepository(
             RoomLaakeRepository(::database, clock),
-            forget = { scheduler.forget(it) },
+            forget = { ids, todayOnly -> scheduler.forget(ids, todayOnly) },
             reschedule = { scheduler.rescheduleAfterChange() }
         )
     }

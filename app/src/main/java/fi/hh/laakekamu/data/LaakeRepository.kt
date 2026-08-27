@@ -43,8 +43,12 @@ interface LaakeRepository {
      */
     suspend fun add(laake: Laake, times: List<Int>): Long
 
-    /** Saves an edited medication and applies rules to its [times]. */
-    suspend fun update(laake: Laake, times: List<EditedTime>)
+    /**
+     * Saves an edited medication and applies rules to its [times]. Returns the ids of the
+     * reminders it ended, deleted or changed, so their stale notifications and snoozes can be
+     * removed.
+     */
+    suspend fun update(laake: Laake, times: List<EditedTime>): List<Long>
 
     /**
      * Soft-deletes a medication and ends its reminders. Returns the ids of all its

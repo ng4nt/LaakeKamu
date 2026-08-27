@@ -36,6 +36,9 @@ class FakeLaakeRepository(
     /** When set, [nameError] fails, as when the database is lost between two calls. */
     var nameErrorFails = false
 
+    /** What [update] reports as the reminders it changed. */
+    var changedOnUpdate: List<Long> = emptyList()
+
     /** When set, [delete] fails, as when the database can't be written. */
     var deleteFails = false
 
@@ -101,9 +104,10 @@ class FakeLaakeRepository(
         return id
     }
 
-    override suspend fun update(laake: Laake, times: List<EditedTime>) {
+    override suspend fun update(laake: Laake, times: List<EditedTime>): List<Long> {
         updated += laake to times
         laakkeet.value = laakkeet.value.map { if (it.laakeId == laake.laakeId) laake else it }
+        return changedOnUpdate
     }
 
     override suspend fun delete(laakeId: Long): List<Long> {

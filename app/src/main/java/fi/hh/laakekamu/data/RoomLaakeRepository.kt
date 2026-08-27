@@ -120,10 +120,11 @@ class RoomLaakeRepository(
      * TARVITTAESSA ends every current reminder; a changed start date moves reminders that
      * haven't started yet; a changed end date may not be in the past, and reopening a medication
      * that ended before yesterday restarts its times from today without touching the gap.
+     * Returns the ids of the reminders it ended, deleted or changed.
      */
-    override suspend fun update(laake: Laake, times: List<EditedTime>) {
+    override suspend fun update(laake: Laake, times: List<EditedTime>): List<Long> {
         val db = database()
-        db.withTransaction {
+        return db.withTransaction {
             val old =
                 requireNotNull(db.laakeDao().getById(laake.laakeId)) {
                     "No medication ${laake.laakeId}"
@@ -149,7 +150,7 @@ class RoomLaakeRepository(
                 val endsToday = endsToday(db, laake.laakeId, today)
                 planEdit(current, times, today, laake.aloituspv, taken, endsToday)
             }
-            apply(db, laake.laakeId, current, capped(timeChanges, current))
+            val changed = apply(db, laake.laakeId, current, capped(timeChanges, current))
             // ...then a start-date change, against the reminders as they are now.
             if (laake.aloituspv != old.aloituspv) {
                 val afterTimes = currentJaksot(db, laake.laakeId)
@@ -161,13 +162,14 @@ class RoomLaakeRepository(
                         today,
                         takenToday(db, afterTimes, today)
                     )
-                apply(db, laake.laakeId, afterTimes, capped(moves, afterTimes))
+                changed += apply(db, laake.laakeId, afterTimes, capped(moves, afterTimes))
             }
             // ...and last, reopening after an old end date, so the gap days stay not due.
             val afterStart = currentJaksot(db, laake.laakeId)
             val reopen =
                 reopenAfterEnd(afterStart, old.lopetuspv, laake.lopetuspv, today, laake.aloituspv)
-            apply(db, laake.laakeId, afterStart, reopen)
+            changed += apply(db, laake.laakeId, afterStart, reopen)
+            changed.toList()
         }
     }
 
@@ -227,15 +229,19 @@ class RoomLaakeRepository(
         db.muistutusDao().getByLaake(laakeId).filter { it.voimassaAsti == today }.map { it.aika }
             .toSet()
 
-    /** Writes an change set. [current] are the rows the changes were planned against. */
+    /**
+     * Writes an change set. [current] are the rows the changes were planned against. Returns
+     * the ids of the existing reminders it changed (every change but [Muutos.Lisaa]).
+     */
     private suspend fun apply(
         db: AppDatabase,
         laakeId: Long,
         current: List<Muistutusjakso>,
         changes: List<Muutos>
-    ) {
+    ): MutableSet<Long> {
         val byId = current.associateBy { it.id }
         val dao = db.muistutusDao()
+        val changed = mutableSetOf<Long>()
         changes.forEach { muutos ->
             when (muutos) {
                 is Muutos.Lisaa -> {
@@ -249,21 +255,30 @@ class RoomLaakeRepository(
                         )
                     )
                 }
-                is Muutos.Poista -> dao.deleteById(muutos.id)
+                is Muutos.Poista -> {
+                    dao.deleteById(muutos.id)
+                    changed += muutos.id
+                }
                 is Muutos.Paata -> {
                     val alkaen = byId.getValue(muutos.id).voimassaAlkaen
                     require(isValidDateRange(alkaen, muutos.voimassaAsti)) {
                         "voimassa_asti before voimassa_alkaen"
                     }
                     dao.setVoimassaAsti(muutos.id, muutos.voimassaAsti)
+                    changed += muutos.id
                 }
                 is Muutos.VaihdaAika -> {
                     require(isValidReminderTime(muutos.aika)) { "Reminder time outside 0..1439" }
                     dao.setAika(muutos.id, muutos.aika)
+                    changed += muutos.id
                 }
-                is Muutos.SiirraAlku -> dao.setVoimassaAlkaen(muutos.id, muutos.voimassaAlkaen)
+                is Muutos.SiirraAlku -> {
+                    dao.setVoimassaAlkaen(muutos.id, muutos.voimassaAlkaen)
+                    changed += muutos.id
+                }
             }
         }
+        return changed
     }
 }
 

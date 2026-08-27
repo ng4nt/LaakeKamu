@@ -24,10 +24,10 @@ class AjastavaLaakeRepositoryTest {
     private val gate = CompletableDeferred<Unit>()
     private var started = 0
     private var finished = 0
-    private val forgotten = mutableListOf<List<Long>>()
+    private val forgotten = mutableListOf<Pair<List<Long>, Boolean>>()
     private val repository = AjastavaLaakeRepository(
         fake,
-        forget = { forgotten += it },
+        forget = { ids, todayOnly -> forgotten += ids to todayOnly },
         reschedule = {
             started++
             gate.await()
@@ -55,15 +55,17 @@ class AjastavaLaakeRepositoryTest {
     }
 
     @Test
-    fun updateFinishesTheRescheduleWhenTheCallerIsCancelled() =
+    fun updateForgetsTodaysDosesOfTheChangedRemindersAndFinishesTheReschedule() =
         runTest(UnconfinedTestDispatcher()) {
             fake.laakkeet.value = listOf(laake())
+            fake.changedOnUpdate = listOf(7, 8)
             val caller = launch {
                 repository.update(laake().copy(nimi = "Uusi"), listOf(EditedTime(null, 480)))
             }
             caller.cancel()
             gate.complete(Unit)
             caller.join()
+            assertEquals(listOf(listOf(7L, 8L) to true), forgotten)
             assertEquals(1, finished)
         }
 
@@ -76,7 +78,7 @@ class AjastavaLaakeRepositoryTest {
             gate.complete(Unit)
             caller.join()
             assertEquals(listOf(1L), fake.deleted)
-            assertEquals(1, forgotten.size)
+            assertEquals(listOf(emptyList<Long>() to false), forgotten)
             assertEquals(1, finished)
             assertTrue(caller.isCancelled)
         }

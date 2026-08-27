@@ -159,15 +159,22 @@ class MuistutusScheduler(
     }
 
     /**
-     * A medication was deleted: removes the notifications of its reminders
-     * [muistutusIds] and cancels their snoozes. A snooze would find nothing due and stay silent,
-     * but cancelling it means the phone isn't woken for nothing. The slot alarms are the
-     * reschedule's job.
+     * A medication was deleted or edited: removes the notifications of the
+     * reminders [muistutusIds] (with [todayOnly], only those about today's dose) and cancels
+     * their snoozes. A snooze would mostly find nothing due and stay silent, but cancelling it
+     * means the phone isn't woken for nothing, and a moved time isn't reminded at its old one
+     *. A snooze lasts 10 minutes, so one for yesterday's dose isn't kept. The slot
+     * alarms are the reschedule's job.
      */
-    suspend fun forget(muistutusIds: Collection<Long>) {
+    suspend fun forget(muistutusIds: Collection<Long>, todayOnly: Boolean = false) {
+        val today = LocalDate.now(clock)
         withContext(ioDispatcher) {
             muistutusIds.forEach { id ->
-                Ilmoitukset.poista(appContext, id)
+                if (todayOnly) {
+                    Ilmoitukset.poistaPaivan(appContext, id, today)
+                } else {
+                    Ilmoitukset.poista(appContext, id)
+                }
                 snoozeIntent(id, null, PendingIntent.FLAG_NO_CREATE)?.let {
                     alarmManager.cancel(it)
                     it.cancel()
