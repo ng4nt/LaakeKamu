@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import fi.hh.laakekamu.R
+import fi.hh.laakekamu.reminders.Ilmoitukset
 import fi.hh.laakekamu.ui.components.LkSmallButton
 import fi.hh.laakekamu.ui.theme.LkInput
 
@@ -43,8 +44,13 @@ fun rememberIlmoituksetSallittu(): Boolean {
     return sallittu
 }
 
-private fun sallittu(context: Context) =
-    NotificationManagerCompat.from(context).areNotificationsEnabled()
+/** False if all notifications or just the reminder channel are off. */
+private fun sallittu(context: Context): Boolean {
+    val manager = NotificationManagerCompat.from(context)
+    val kanavaPois = manager.getNotificationChannelCompat(Ilmoitukset.KANAVA)?.importance ==
+        NotificationManagerCompat.IMPORTANCE_NONE
+    return manager.areNotificationsEnabled() && !kanavaPois
+}
 
 /**
  * "Muistutukset ovat pois päältä" with "Salli ilmoitukset", which opens the app's notification
