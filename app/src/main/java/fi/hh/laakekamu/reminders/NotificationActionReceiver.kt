@@ -27,8 +27,6 @@ class NotificationActionReceiver : BroadcastReceiver() {
         if (muistutusId <= 0 || paivaDay == Long.MIN_VALUE) return
         if (action != OTETTU && action != MUISTUTA) return
         val paiva = LocalDate.ofEpochDay(paivaDay)
-        // The button's notification goes at once, also if the work below fails.
-        Ilmoitukset.poista(context, muistutusId)
         val container = (context.applicationContext as LaakeKamuApp).container
         val pending = goAsync()
         CoroutineScope(SupervisorJob() + container.ioDispatcher).launch {
@@ -40,6 +38,9 @@ class NotificationActionReceiver : BroadcastReceiver() {
                         container.scheduler.snooze(muistutusId, paiva)
                     }
                 }
+                // Only after the work succeeded: if it fails, the notification stays so the user
+                // can press the button again (plan order: insert, then cancel).
+                Ilmoitukset.poista(context, muistutusId)
             } catch (e: TietokantaEiSaatavillaException) {
                 Ilmoitukset.naytaTietokantaVirhe(context)
             } catch (e: TimeoutCancellationException) {
