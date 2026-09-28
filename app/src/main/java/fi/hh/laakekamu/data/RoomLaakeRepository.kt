@@ -43,28 +43,36 @@ class RoomLaakeRepository(
 ) : LaakeRepository {
     private fun today(): LocalDate = LocalDate.now(clock)
 
+    /** Opens the database on first collection, then follows [source] (the open is lazy). */
+    private fun <T> observe(source: (AppDatabase) -> Flow<T>): Flow<T> = flow {
+        emitAll(source(database()))
+    }
+
     /** Medication types for the wizard's Tyyppi dropdown. */
-    override fun observeTyypit(): Flow<List<Tyyppi>> = flow {
-        emitAll(database().valintaDao().observeTyypit())
+    override fun observeTyypit(): Flow<List<Tyyppi>> = observe {
+        it.valintaDao().observeTyypit()
     }
 
     /** Dose units for the wizard's Yksikkö dropdown. */
-    override fun observeYksikot(): Flow<List<Yksikko>> = flow {
-        emitAll(database().valintaDao().observeYksikot())
+    override fun observeYksikot(): Flow<List<Yksikko>> = observe {
+        it.valintaDao().observeYksikot()
     }
 
     /** Medications that aren't deleted, in Finnish alphabetical order (Å, Ä, Ö after Z). */
     override fun observeActive(): Flow<List<Laake>> = flow {
-        emitAll(database().laakeDao().observeActive())
-    }.map { laakkeet ->
-        // A new Collator per emission: Collator isn't thread-safe.
+        // One Collator per collection, not per emission. Collator isn't thread-safe, but a
+        // collection's map runs one emission at a time, and each collector gets its own.
         val finnish = Collator.getInstance(FINNISH)
-        laakkeet.sortedWith(compareBy(finnish) { it.nimi })
+        emitAll(
+            database().laakeDao().observeActive().map { laakkeet ->
+                laakkeet.sortedWith(compareBy(finnish) { it.nimi })
+            }
+        )
     }
 
     /** Current reminder times by medication, earliest first (filtered here: a few rows). */
-    override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = flow {
-        emitAll(database().muistutusDao().observeAll())
+    override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = observe {
+        it.muistutusDao().observeAll()
     }.map { reminders ->
         reminders.filter { it.voimassaAsti == null }
             .groupBy({ it.laakeId }, { it.aika })
