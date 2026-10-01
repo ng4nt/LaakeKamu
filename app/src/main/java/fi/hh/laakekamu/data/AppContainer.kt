@@ -65,8 +65,16 @@ class AppContainer(
      * because the reschedule reads through [database].
      */
     suspend fun startOver(): AppDatabase = deleteAndReopen().also {
-        Ilmoitukset.poistaKaikki(appContext)
-        scheduler.rescheduleAfterChange()
+        try {
+            Ilmoitukset.poistaKaikki(appContext)
+            scheduler.rescheduleAfterChange()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The new database is open; the caller only sees that the screen moves on.
+            Log.e(TAG, "Started over, but the old notifications and alarms were not reset", e)
+            throw e
+        }
     }
 
     private suspend fun deleteAndReopen(): AppDatabase = databaseMutex.withLock {
