@@ -20,7 +20,7 @@ android {
         // 2 from the encrypted database: an older build would see the encrypted file as
         // corrupt and Room would delete it, so Android must refuse it as a downgrade.
         versionCode = 2
-        versionName = "1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
