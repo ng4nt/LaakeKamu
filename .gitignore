@@ -14,8 +14,6 @@
 .cxx
 local.properties
 
-# Private project materials (PDFs, spec, SQL drafts, plan files)
-/docs/
 # Signing secrets
 *.jks
 *.keystore
