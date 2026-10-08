@@ -1,0 +1,120 @@
+package fi.hh.laakekamu.data
+
+import fi.hh.laakekamu.data.entity.Laake
+import fi.hh.laakekamu.data.entity.Muistutus
+import fi.hh.laakekamu.data.entity.Tyyppi
+import fi.hh.laakekamu.data.entity.Yksikko
+import fi.hh.laakekamu.domain.EditedTime
+import fi.hh.laakekamu.domain.NameError
+import fi.hh.laakekamu.domain.validateName
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+
+/** In-memory [LaakeRepository] for ViewModel unit tests. Uses the real name rule. */
+class FakeLaakeRepository(
+    val tyypit: List<Tyyppi> = listOf(Tyyppi(1, "tabletti"), Tyyppi(2, "kapseli")),
+    val yksikot: List<Yksikko> = listOf(Yksikko("mg"), Yksikko("ml")),
+    /** The type and medication queries fail, as when the database can't be opened. */
+    private val failChoices: Boolean = false,
+    /** [add] fails, as when the database can't be written. */
+    private val failAdd: Boolean = false
+) : LaakeRepository {
+    val laakkeet = MutableStateFlow<List<Laake>>(emptyList())
+    val currentTimes = MutableStateFlow<Map<Long, List<Int>>>(emptyMap())
+    val added = mutableListOf<Pair<Laake, List<Int>>>()
+
+    /** When set, [nameError] waits for it, so a test can act while the name is checked. */
+    var nameErrorGate: CompletableDeferred<Unit>? = null
+
+    /** When set, [add] rejects the medication with an IllegalArgumentException. */
+    var addRejects = false
+
+    /** When set, [nameError] fails, as when the database is lost between two calls. */
+    var nameErrorFails = false
+
+    /** What [update] reports as the reminders it changed. */
+    var changedOnUpdate: List<Long> = emptyList()
+
+    /** When set, [delete] fails, as when the database can't be written. */
+    var deleteFails = false
+
+    /** The ids passed to [delete], in order. */
+    val deleted = mutableListOf<Long>()
+
+    override fun observeTyypit(): Flow<List<Tyyppi>> = if (failChoices) {
+        flow { throw IllegalStateException("database unavailable") }
+    } else {
+        flowOf(tyypit)
+    }
+
+    override fun observeYksikot(): Flow<List<Yksikko>> = flowOf(yksikot)
+
+    override fun observeActive(): Flow<List<Laake>> = if (failChoices) {
+        flow { throw IllegalStateException("database unavailable") }
+    } else {
+        laakkeet.map { list -> list.filter { it.aktiivinen } }
+    }
+
+    override fun observeCurrentTimes(): Flow<Map<Long, List<Int>>> = currentTimes
+
+    /** The current reminders [currentTimes] returns, by medication id. */
+    val currentReminders = mutableMapOf<Long, List<Muistutus>>()
+
+    /** When set, [get] fails, as when the database can't be opened. */
+    var getFails = false
+
+    /** The medications and times passed to [update], in order. */
+    val updated = mutableListOf<Pair<Laake, List<EditedTime>>>()
+
+    override suspend fun get(laakeId: Long): Laake? {
+        check(!getFails) { "database unavailable" }
+        return laakkeet.value.find { it.laakeId == laakeId }
+    }
+
+    override suspend fun currentTimes(laakeId: Long): List<Muistutus> =
+        currentReminders[laakeId].orEmpty()
+
+    override suspend fun nameError(name: String, editedId: Long?): NameError? {
+        nameErrorGate?.await()
+        check(!nameErrorFails) { "database unavailable" }
+        return nameErrorFor(name, editedId)
+    }
+
+    private fun nameErrorFor(name: String, editedId: Long?): NameError? = validateName(
+        name,
+        laakkeet.value.filter {
+            it.aktiivinen
+        }.associate { it.laakeId to it.nimi },
+        editedId
+    )
+
+    override suspend fun add(laake: Laake, times: List<Int>): Long {
+        check(!failAdd) { "database unavailable" }
+        require(!addRejects) { "Invalid medication" }
+        // Like the real repository: is checked again inside the save.
+        nameErrorFor(laake.nimi, null)?.let { throw IllegalArgumentException("Invalid name: $it") }
+        val id = (laakkeet.value.maxOfOrNull { it.laakeId } ?: 0) + 1
+        laakkeet.value = laakkeet.value + laake.copy(laakeId = id)
+        if (times.isNotEmpty()) currentTimes.value = currentTimes.value + (id to times.sorted())
+        added += laake to times
+        return id
+    }
+
+    override suspend fun update(laake: Laake, times: List<EditedTime>): List<Long> {
+        updated += laake to times
+        laakkeet.value = laakkeet.value.map { if (it.laakeId == laake.laakeId) laake else it }
+        return changedOnUpdate
+    }
+
+    override suspend fun delete(laakeId: Long): List<Long> {
+        if (deleteFails) throw IllegalStateException("database unavailable")
+        deleted += laakeId
+        laakkeet.value =
+            laakkeet.value.map { if (it.laakeId == laakeId) it.copy(aktiivinen = false) else it }
+        return emptyList()
+    }
+}

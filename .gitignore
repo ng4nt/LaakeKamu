@@ -1,33 +1,25 @@
-*.iml
+# Gradle / build outputs
 .gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
+build/
 /captures
 .externalNativeBuild
 .cxx
+.kotlin/
+/app/release/
+*.apk
+*.aab
+
+# IDE / OS local state
+*.iml
+/.idea/
+.DS_Store
 local.properties
 
-# Private project materials (PDFs, spec, SQL drafts, plan files)
-/docs/
 # Signing secrets
 *.jks
 *.keystore
 keystore.properties
-# Build outputs and release artifacts
-build/
-/app/release/
-*.apk
-*.aab
-# IDE / tooling local state
-/.idea/
-.kotlin/
+
 # Debug artifacts
 *.db
 *.db-shm

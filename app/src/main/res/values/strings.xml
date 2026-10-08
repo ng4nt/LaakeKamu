@@ -1,3 +1,132 @@
 <resources>
-    <string name="app_name">LaakeKamu</string>
+    <string name="app_name">LääkeKamu</string>
+
+    <!-- Main screens: bottom bar descriptions and screen titles -->
+    <string name="nav_laakelista">Lääkelista</string>
+    <string name="nav_etusivu">Etusivu</string>
+    <string name="nav_oirepaivakirja">Oirepäiväkirja</string>
+
+    <!-- Shared form components: date and time pickers -->
+    <string name="valitse_paiva">Valitse päivä</string>
+    <string name="valitse_aika">Valitse aika</string>
+    <string name="ok">OK</string>
+    <string name="peruuta">Peruuta</string>
+    <string name="tyhjenna">Tyhjennä</string>
+    <string name="paivamaara_placeholder">pp.kk.vvvv</string>
+    <string name="klo_aika">klo %1$s</string>
+
+    <!-- Common buttons -->
+    <string name="lisaa">Lisää</string>
+    <string name="takaisin">Takaisin</string>
+
+    <!-- Add/edit wizard, step 1 -->
+    <string name="laake_label">Lääke</string>
+    <string name="laake_placeholder">Kirjoita lääkkeen nimi</string>
+    <string name="tyyppi_label">Tyyppi</string>
+    <string name="tyyppi_placeholder">Valitse lääkkeen tyyppi</string>
+    <string name="annosmaara_label">Annosmäärä</string>
+    <string name="annosmaara_placeholder">Kirjoita</string>
+    <string name="yksikko_label">Yksikkö</string>
+    <string name="yksikko_placeholder">Valitse</string>
+    <string name="seuraava_vaihe">Seuraava vaihe</string>
+    <string name="virhe_nimi_puuttuu">Lääkkeen nimi puuttuu.</string>
+    <string name="virhe_nimi_liian_pitka">Nimi on liian pitkä (enintään %1$d merkkiä).</string>
+    <string name="virhe_nimi_jo_lisatty">Lääke \"%1$s\" on jo lisätty.</string>
+    <string name="virhe_tyyppi_puuttuu">Valitse lääkkeen tyyppi.</string>
+    <string name="virhe_annosmaara_puuttuu">Annosmäärä puuttuu.</string>
+    <string name="virhe_yksikko_puuttuu">Valitse yksikkö.</string>
+    <string name="virhe_lataus">Lääketyyppejä ja yksiköitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
+    <!-- Add/edit wizard, step 2 -->
+    <string name="aika_label">Aika</string>
+    <string name="aika_rivi">Aika %1$d</string>
+    <string name="lisaa_aika">+ Lisää aika</string>
+    <string name="poista_aika">Poista aika %1$d</string>
+    <string name="kuinka_usein_label">Kuinka usein otat lääkkeen?</string>
+    <string name="kuinka_usein_placeholder">Valitse</string>
+    <string name="paivittain">Päivittäin</string>
+    <string name="tarvittaessa">Tarvittaessa</string>
+    <string name="aloituspaiva_label">Lääkkeen aloituspäivä</string>
+    <string name="lopetuspaiva_label">Lääkkeen lopetuspäivä</string>
+    <string name="valmis">Valmis!</string>
+    <string name="virhe_aika_puuttuu">Valitse aika.</string>
+    <string name="virhe_aika_jo_lisatty">Aika klo %1$s on jo lisätty.</string>
+    <string name="virhe_kuinka_usein_puuttuu">Valitse, kuinka usein otat lääkkeen.</string>
+    <string name="virhe_lopetus_ennen_aloitusta">Lopetuspäivä ei voi olla ennen aloituspäivää.</string>
+    <string name="virhe_tallennus">Lääkkeen tallennus epäonnistui. Yritä uudelleen.</string>
+    <string name="laake_lisatty">Lääke lisätty</string>
+
+    <!-- Lääkelista -->
+    <string name="muokkaa">Muokkaa</string>
+    <string name="ota_paivittain">OTA PÄIVITTÄIN</string>
+    <string name="tarvittaessa_otsikko">TARVITTAESSA</string>
+    <string name="annos">%1$s %2$s</string>
+    <string name="laakelista_tyhja">Lääkelista on tyhjä. Lisää ensimmäinen lääke Lisää-painikkeesta.</string>
+    <string name="virhe_lista">Lääkelistaa ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+
+    <!-- Muokkaa lääkettä -->
+    <string name="haluan_muokata">Haluan muokata lääkettä</string>
+    <string name="valitse">Valitse</string>
+    <string name="poista_laake">Poista lääke</string>
+    <string name="poista_laake_otsikko">Poistetaanko %1$s?</string>
+    <string name="poista_laake_teksti">Lääke poistuu lääkelistasta ja etusivulta. Aiemmat merkinnät säilyvät oirepäiväkirjassa.</string>
+    <string name="laake_poistettu">Lääke poistettu</string>
+    <string name="virhe_laake_poisto">Lääkettä ei voitu poistaa. Yritä uudelleen.</string>
+    <string name="virhe_muokkaa_lataus">Lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_muokattava_lataus">Lääkettä ei voitu avata muokattavaksi. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_lopetus_menneisyydessa">Lopetuspäivä ei voi olla menneisyydessä.</string>
+    <string name="muutokset_tallennettu">Muutokset tallennettu</string>
+
+    <!-- Etusivu -->
+    <string name="ei_laakkeita_paivalle">Ei lääkkeitä tälle päivälle</string>
+    <string name="lisaa_laake">Lisää lääke</string>
+    <string name="ottamatta">ottamatta</string>
+    <string name="tila_tulossa">tulossa</string>
+    <string name="tila_otettu">otettu</string>
+    <string name="virhe_etusivu">Päivän lääkkeitä ei voitu ladata. Yritä myöhemmin uudelleen.</string>
+    <string name="virhe_merkinta">Muutosta ei voitu tallentaa. Yritä uudelleen.</string>
+    <!-- Header: "Tänään on torstai 18.12." / "klo 7.00"; other days "Torstai 18.12." -->
+    <string name="tanaan_on">Tänään on %1$s %2$s\nklo %3$s</string>
+    <string name="paiva_ja_pvm">%1$s %2$s</string>
+    <!-- Week strip cell for TalkBack: "torstai 18.12., tänään" -->
+    <string name="paiva_tanaan">%1$s, tänään</string>
+    <!-- Progress ("40%"; Finnish style with a no-break space). TalkBack reads the
+         whole progress as "Edistys 40 %: otettu 2, ottamatta 1, tulossa 2". -->
+    <string name="prosentti">%1$d %%</string>
+    <string name="edistys_kuvaus">Edistys %1$d %%: %2$s</string>
+    <string name="edistys_otettu">otettu %1$d</string>
+    <string name="edistys_ottamatta">ottamatta %1$d</string>
+    <string name="edistys_tulossa">tulossa %1$d</string>
+
+    <!-- duration labels: wizard hint and medication list -->
+    <string name="kesto_alkaa">alkaa %1$s</string>
+    <string name="kesto_jaljella">vielä %1$d pv</string>
+    <string name="kesto_paattynyt">päättynyt</string>
+    <string name="kesto_kaytossa">Käytössä %1$d pv</string>
+
+    <!-- Database can't be opened: error screen and the start-over confirmation -->
+    <string name="tietokanta_virhe_otsikko">Tietoja ei voitu avata</string>
+    <!-- the open failed for a reason a start-over can't fix (e.g. full storage) -->
+    <string name="tietokanta_virhe_tilapainen">Lääkkeitäsi ja merkintöjäsi ei voitu nyt avata. Tietoja ei ole poistettu. Tarkista, että puhelimessa on vapaata tallennustilaa, ja yritä uudelleen.</string>
+    <string name="tietokanta_virhe_teksti">Lääkkeitäsi ja merkintöjäsi ei voitu avata. Tietoja ei ole poistettu. Yritä uudelleen. Jos se ei auta, voit aloittaa alusta.</string>
+    <string name="yrita_uudelleen">Yritä uudelleen</string>
+    <string name="aloita_alusta">Aloita alusta</string>
+    <string name="aloita_alusta_otsikko">Aloitetaanko alusta?</string>
+    <string name="aloita_alusta_teksti">Kaikki lääkkeet, niiden historia ja oirepäiväkirja poistetaan pysyvästi. Tätä ei voi perua.</string>
+
+    <!-- Reminders -->
+    <string name="kanava_muistutukset">Lääkemuistutukset</string>
+    <string name="muistutukset_pois">Muistutukset ovat pois päältä</string>
+    <string name="salli_ilmoitukset">Salli ilmoitukset</string>
+    <string name="ilmoitus_otsikko">Aika ottaa lääke</string>
+    <!-- A dose missed while the phone was off -->
+    <string name="ilmoitus_myohassa">Myöhässä</string>
+    <!-- "A aamulääke 5 mg · klo 8.00" -->
+    <string name="ilmoitus_annos">%1$s %2$s %3$s · klo %4$s</string>
+    <!-- Lock screen version: no medication data -->
+    <string name="ilmoitus_julkinen">Sinulla on lääkemuistutus</string>
+    <string name="ilmoitus_otettu">Otettu</string>
+    <string name="ilmoitus_muistuta">Muistuta 10 min päästä</string>
+    <string name="ilmoitus_huomio">LääkeKamu tarvitsee huomiota</string>
+    <string name="ilmoitus_avaa_sovellus">Avaa sovellus</string>
 </resources>

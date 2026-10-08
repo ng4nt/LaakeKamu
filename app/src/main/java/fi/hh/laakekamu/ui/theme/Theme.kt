@@ -1,57 +1,51 @@
 package fi.hh.laakekamu.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+// Always the light Figma scheme: no dark theme and no dynamic colour, so the app looks the
+// same on every phone and the measured contrasts stay valid.
+private val LaakeKamuColorScheme = lightColorScheme(
+    primary = LkPrimary,
     onPrimary = Color.White,
+    secondary = LkNavBar,
     onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiary = LkLight,
+    onTertiary = LkOnLight,
+    background = Color.White,
+    onBackground = Color.Black,
+    surface = Color.White,
+    onSurface = Color.Black,
+    surfaceVariant = LkInput,
+    onSurfaceVariant = Color.Black,
+    outline = LkPrimary,
+    error = LkDanger,
+    onError = Color.White,
+    // Roles the M3 pickers, menus and snackbar use; left out, they fall back to M3's lavender
+    // defaults, which aren't Figma tokens (focused time field, dialog and menu backgrounds).
+    primaryContainer = LkLight,
+    onPrimaryContainer = LkOnLight,
+    secondaryContainer = LkLight,
+    onSecondaryContainer = LkOnLight,
+    surfaceContainerLowest = Color.White,
+    surfaceContainerLow = Color.White,
+    surfaceContainer = Color.White,
+    surfaceContainerHigh = Color.White,
+    surfaceContainerHighest = LkInput,
+    outlineVariant = LkInput,
+    inverseSurface = LkOnLight,
+    inverseOnSurface = Color.White,
+    inversePrimary = LkLight,
+    // Elevated surfaces (the time dialog) would otherwise get a blue tint of primary.
+    surfaceTint = Color.White
 )
 
 @Composable
-fun LaakeKamuTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun LaakeKamuTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = LaakeKamuColorScheme,
         typography = Typography,
         content = content
     )

@@ -1,47 +1,41 @@
 package fi.hh.laakekamu
 
+import android.content.Context
+import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import fi.hh.laakekamu.ui.LaakeKamuRoot
+import fi.hh.laakekamu.ui.format.withFinnishResources
 import fi.hh.laakekamu.ui.theme.LaakeKamuTheme
+import fi.hh.laakekamu.ui.tietokanta.TietokantaPortti
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: Context) {
+        // Finnish resources whatever the device language, so numbers in the texts stay Latin.
+        super.attachBaseContext(newBase.withFinnishResources())
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // The splash comes from Theme.LaakeKamu.Starting; this switches to the
+        // app theme. It must run before super.onCreate.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The app is always light, so the bar icons must stay dark even in system dark mode.
+        // The default (SystemBarStyle.auto) would follow the system mode instead.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        )
         setContent {
             LaakeKamuTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
+                TietokantaPortti {
+                    LaakeKamuRoot()
                 }
             }
         }
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    LaakeKamuTheme {
-        Greeting("Android")
     }
 }
