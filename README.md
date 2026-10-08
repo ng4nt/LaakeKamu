@@ -10,7 +10,6 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.3-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
 ![Room + SQLCipher](https://img.shields.io/badge/Room%20%2B%20SQLCipher-encrypted-0A7B83)
-![Tests](https://img.shields.io/badge/tests-297-brightgreen)
 ![Network](https://img.shields.io/badge/network-none-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -94,7 +93,7 @@ permission the first time; reminders do not work without it.
 
 ## 🧪 Testing
 
-297 automated tests: 222 JVM unit tests and 75 instrumented tests.
+Automated JVM unit tests and instrumented (device) tests. See [TESTING.md](docs/TESTING.md).
 
 ```bash
 ./gradlew testDebugUnitTest            # JVM unit tests
@@ -109,7 +108,8 @@ permission the first time; reminders do not work without it.
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, packages, reminders, threading, dependency wiring |
 | [DATA_MODEL.md](docs/DATA_MODEL.md) | Tables, columns, constraints, indexes, encryption, ER diagram |
 | [SECURITY.md](docs/SECURITY.md) | Threat model, measures, known limitations, how to report a vulnerability |
-| [PRIVACY.md](docs/PRIVACY.md) | What data the app handles and what it never does |
+| [PRIVACY.md](docs/PRIVACY.md) | What data the app handles, permissions and why, and what it never does |
+| [TESTING.md](docs/TESTING.md) | Test layout, how to run the tests, manual key-loss check |
 
 ## 🗂️ Project layout
 
