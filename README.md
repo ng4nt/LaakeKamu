@@ -125,6 +125,9 @@ docs/            Architecture, data model, security, privacy, test docs
 Identifiers follow the Finnish domain vocabulary: `laake` medication, `muistutus` reminder, `annos` dose,
 `otettu` taken, `oire` symptom, `paivakirja` diary.
 
+## 🎬 Demovideo
+https://youtu.be/QG7yy_U5btE
+
 ## ⚖️ License
 
 LääkeKamu is open source under the [MIT License](LICENSE).
